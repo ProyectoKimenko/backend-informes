@@ -20,10 +20,10 @@ def analysis():
 @app.get("/generate_pdf", status_code=200)
 async def generate_pdf():
     try:
-        total_water_wasted, data_resampled = analyze_data()
+        total_water_wasted, data_resampled, efficiency_percentage, total_water_consumed = analyze_data()
 
         plot_file = create_plot(data_resampled)
-        pdf_file = generate_pdf_report(plot_file, total_water_wasted, 40000,23)
+        pdf_file = generate_pdf_report(plot_file, total_water_wasted, efficiency_percentage, total_water_consumed)
         os.remove(plot_file)
         
         return FileResponse(pdf_file, media_type='application/pdf', filename='water_analysis.pdf')
