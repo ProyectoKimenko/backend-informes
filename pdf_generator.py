@@ -57,7 +57,7 @@ def generate_pdf_report(plot_file, total_water_wasted, total_water_consumed, eff
                         <h2 class="text-center text-xl mb-4">Resumen de Pérdidas de Agua</h2>
                         <p class="text-center text-lg mb-2">Total litros perdidos por ineficiencias: <strong>{{ total_water_wasted }} litros</strong></p>
                         <p class="text-center text-lg mb-2">Total litros consumidos en el mismo período: <strong>{{ total_water_consumed }} litros</strong></p>
-                        <p class="text-center text-lg mb-2">Porcentaje promedio de pérdidas: <strong>{{ efficiency_percentage }}%</strong></p>
+                        <p class="text-center text-lg mb-2">Porcentaje de pérdidas: <strong>{{ efficiency_percentage }}%</strong></p>
                         <p class="text-center text-sm mt-4">NOTA: Los días no incluidos en la comparación corresponden a jornadas sin pérdidas de agua detectadas.</p>
                     </div>
                 </div>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Análisis de Agua</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mx-auto">
+        <h1 class="text-center text-blue-500 text-2xl mb-6">Reporte de Análisis de Agua</h1>
+        <h1 class="text-center">Tamaño de ventana actual en minutos <strong class="text-red-500 font-size-30">{{window_size}}</strong></h1>
+        <div class="mt-6 text-center">
+            <img src="{{ plot_url }}" alt="Water Analysis Plot" class="mx-auto" style="width: 50%; height: auto;">
+        </div>
+        <div class="justify-center flex-row flex">
+            <form action="/view_analysis" method="get" class="bg-white p-4 rounded-lg shadow-lg w-1/4">
+                <div class="mb-3">
+                    <label for="window_size" class="block text-gray-700 text-sm font-bold mb-1">Tamaño de la ventana:</label>
+                    <input type="number" id="window_size" name="window_size" value="60" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="1000">
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <input type="submit" value="Preview" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
+                </div>
+            </form>
+
+            <form action="/generate_pdf" method="get" class="bg-white p-4 rounded-lg shadow-lg ml-4 w-1/4">
+                <div class="mb-3">
+                    <label for="window_size" class="block text-gray-700 text-sm font-bold mb-1">Tamaño de la ventana:</label>
+                    <input type="number" id="window_size" name="window_size" value="60" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="1000">
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <input type="submit" value="Generate PDF" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
+                </div>
+            </form>
+        </div>
+
+        <div class="mt-6 bg-blue-500 text-white p-4 rounded-lg shadow-lg">
+            <h2 class="text-center text-lg mb-3">Results</h2>
+            <p class="text-center text-base mb-2"><strong>Total Agua Perdida:</strong> {{ total_water_wasted }}</p>
+            <p class="text-center text-base mb-2"><strong>Porcentaje de Ineficiencia:</strong> {{ efficiency_percentage }}%</p>
+            <p class="text-center text-base mb-2"><strong>Total Agua Consumida:</strong> {{ total_water_consumed }}</p>
+        </div>
+    </div>
+</body>
+</html>
