@@ -9,7 +9,7 @@ import tempfile
 from fastapi.responses import HTMLResponse
 from fastapi.requests import Request
 from fastapi.templating import Jinja2Templates
-from scrape import fetch_page_title
+from scrape import fetch_page_info
 
 from typing import List, Dict
 
@@ -95,9 +95,10 @@ async def view_analysis(request: Request, window_size: int = 60):
 
 
 
-@app.get("/fetch_page_title", status_code=200)
-async def get_page_title(url: str):
-    title = fetch_page_title(url)  # Call the internal function to fetch the title
+@app.get("/fetch_page_info", status_code=200)
+async def get_page_info(url: str):
+    print(f"Fetching page info for URL: {url}")
+    title = fetch_page_info(url)  # Call the internal function to fetch the title
     return {"status": "success", "title": title}
 
 
