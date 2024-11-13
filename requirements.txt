@@ -6,3 +6,4 @@ reportlab
 weasyprint
 jinja2
 selenium
+supabase

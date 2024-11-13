@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #1fa9c9;
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        .logo-container {
+            flex: 0 0 200px;
+        }
+
+        .report-info {
+            text-align: right;
+            color: #7F8C8D;
+        }
+
+        .executive-summary {
+            background-color: #F8FAFB;
+            border-left: 4px solid #1fa9c9;
+            padding: 25px 30px;
+            margin-bottom: 50px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #E5E8EC;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            color: #1fa9c9;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+
+        .chart-section {
+            background: white;
+            border: 1px solid #E5E8EC;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+
+        .chart-placeholder {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .chart-placeholder h4 {
+            font-size: 1.6rem;
+            color: #333;
+            margin-bottom: 25px;
+        }
+        .chart-placeholder img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+        .observations {
+            font-size: 1.125rem;
+            line-height: 1.6;
+            margin-top: 30px;
+        }
+        .observations h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #1fa9c9;
+            text-align: center;
+        }
+        .observations p {
+            text-align: justify;
+            color: #555;
+        }
+        /* Ajustes responsivos */
+        @media (max-width: 768px) {
+            body {
+                margin: 20px;
+            }
+            .main-header h1 {
+                font-size: 2.5rem;
+            }
+            .section-header h2 {
+                font-size: 2rem;
+            }
+            .info h3, .observations h2 {
+                font-size: 1.5rem;
+            }
+            .chart-placeholder h4 {
+                font-size: 1.4rem;
+            }
+        }
+        /* Evitar saltos de página dentro de secciones */
+        .page-section {
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+        .page-section:last-child {
+            page-break-after: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="report-header">
+        <div class="logo-container">
+            <img src="https://kimenko.cl/wp-content/uploads/2020/06/cropped-logo3.jpg" alt="Company Logo" style="width: 180px;">
+        </div>
+        <div class="report-info">
+            <h1>{{ title }}</h1>
+            <p>Informe generado: {{ created_at.strftime('%d de %B, %Y') }}</p>
+            <p>Ubicación: {{ place_name }}</p>
+        </div>
+    </div>
+
+    <div class="executive-summary">
+        <h2>Resumen Ejecutivo</h2>
+        <p>Este informe presenta un análisis detallado del consumo de agua, destacando métricas clave y tendencias significativas para la toma de decisiones.</p>
+    </div>
+
+    {% for section in sections %}
+        <div class="page-section">
+            {% include section.template_name %}
+        </div>
+    {% endfor %}
+</body>
+</html>

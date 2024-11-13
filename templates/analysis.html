@@ -19,29 +19,51 @@
                     <label for="window_size" class="block text-gray-700 text-sm font-bold mb-1">Tamaño de la ventana:</label>
                     <input type="number" id="window_size" name="window_size" value="60" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="1000">
                 </div>
+                <div class="mb-3">
+                    <label for="month" class="block text-gray-700 text-sm font-bold mb-1">Mes:</label>
+                    <input type="number" id="month" name="month" value="1" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="12">
+                </div>
+                <div class="mb-3">
+                    <label for="year" class="block text-gray-700 text-sm font-bold mb-1">Año:</label>
+                    <input type="number" id="year" name="year" value="2024" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="2000" max="2100">
+                </div>
 
                 <div class="flex items-center justify-between">
                     <input type="submit" value="Preview" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
                 </div>
             </form>
 
-            <form action="/generate_pdf" method="get" class="bg-white p-4 rounded-lg shadow-lg ml-4 w-1/4">
+            <form action="/generate_monthly_pdf" method="get" class="bg-white p-4 rounded-lg shadow-lg ml-4 w-1/4">
                 <div class="mb-3">
                     <label for="window_size" class="block text-gray-700 text-sm font-bold mb-1">Tamaño de la ventana:</label>
                     <input type="number" id="window_size" name="window_size" value="60" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="1000">
                 </div>
+                <div class="mb-3">
+                    <label for="month" class="block text-gray-700 text-sm font-bold mb-1">Mes:</label>
+                    <input type="number" id="month" name="month" value="1" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="12">
+                </div>
+                <div class="mb-3">
+                    <label for="year" class="block text-gray-700 text-sm font-bold mb-1">Año:</label>
+                    <input type="number" id="year" name="year" value="2024" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="2000" max="2100">
+                </div>
 
                 <div class="flex items-center justify-between">
-                    <input type="submit" value="Generate PDF" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
+                    <input type="submit" value="Generate Monthly PDF" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
                 </div>
             </form>
         </div>
 
         <div class="mt-6 bg-blue-500 text-white p-4 rounded-lg shadow-lg">
             <h2 class="text-center text-lg mb-3">Results</h2>
-            <p class="text-center text-base mb-2"><strong>Total Agua Perdida:</strong> {{ total_water_wasted }}</p>
-            <p class="text-center text-base mb-2"><strong>Porcentaje de Ineficiencia:</strong> {{ efficiency_percentage }}%</p>
-            <p class="text-center text-base mb-2"><strong>Total Agua Consumida:</strong> {{ total_water_consumed }}</p>
+            <h3 class="text-center text-base mb-2">Días Laborales (Lunes-Viernes)</h3>
+            <p class="text-center text-base mb-2"><strong>Total Agua Perdida:</strong> {{ total_water_wasted_weekdays }}</p>
+            <p class="text-center text-base mb-2"><strong>Porcentaje de Ineficiencia:</strong> {{ efficiency_percentage_weekdays }}%</p>
+            <p class="text-center text-base mb-2"><strong>Total Agua Consumida:</strong> {{ total_water_consumed_weekdays }}</p>
+            
+            <h3 class="text-center text-base mt-4 mb-2">Fines de Semana (Sábado-Domingo)</h3>
+            <p class="text-center text-base mb-2"><strong>Total Agua Perdida:</strong> {{ total_water_wasted_weekends }}</p>
+            <p class="text-center text-base mb-2"><strong>Porcentaje de Ineficiencia:</strong> {{ efficiency_percentage_weekends }}%</p>
+            <p class="text-center text-base mb-2"><strong>Total Agua Consumida:</strong> {{ total_water_consumed_weekends }}</p>
         </div>
     </div>
 </body>

@@ -1,0 +1,43 @@
+<div class="section-content">
+    <h2>{{ section.title }}</h2>
+    <p class="section-dates">{{ section.data.dates }}</p>
+    
+    {% set colors = {
+        'Semana 1': '#1fa9c9',
+        'Semana 2': '#34495e',
+        'Semana 3': '#2ecc71',
+        'Semana 4': '#e67e22',
+        'Semana 5': '#9b59b6'
+    } %}
+    
+    {% set week_number = section.title.split(' ')[1] %}
+    {% set current_color = colors['Semana ' + week_number] if 'Semana ' + week_number in colors else '#1fa9c9' %}
+    
+    <div class="metrics-grid" style="grid-template-columns: repeat(4, 1fr); gap: 10px;">
+        <div class="metric-card" style="padding: 10px; border-top: 3px solid {{ current_color }};">
+            <h3 style="font-size: 0.9rem;">Consumo Total</h3>
+            <div class="metric-value" style="font-size: 1.4rem; color: {{ current_color }};">{{ section.data.total_consumption }}</div>
+            <p style="font-size: 0.8rem;">litros</p>
+        </div>
+        <div class="metric-card" style="padding: 10px; border-top: 3px solid {{ current_color }};">
+            <h3 style="font-size: 0.9rem;">Eficiencia</h3>
+            <div class="metric-value" style="font-size: 1.4rem; color: {{ current_color }};">{{ section.data.efficiency }}%</div>
+            <p style="font-size: 0.8rem;">de aprovechamiento</p>
+        </div>
+        <div class="metric-card" style="padding: 10px; border-top: 3px solid {{ current_color }};">
+            <h3 style="font-size: 0.9rem;">Pico de Consumo</h3>
+            <div class="metric-value" style="font-size: 1.4rem; color: {{ current_color }};">{{ section.data.peak_consumption }}</div>
+            <p style="font-size: 0.8rem;">{{ section.data.peak_day }}</p>
+        </div>
+        <div class="metric-card" style="padding: 10px; border-top: 3px solid {{ current_color }};">
+            <h3 style="font-size: 0.9rem;">Pérdidas</h3>
+            <div class="metric-value" style="font-size: 1.4rem; color: {{ current_color }};">{{ section.data.wasted }}</div>
+            <p style="font-size: 0.8rem;">litros</p>
+        </div>
+    </div>
+
+    <div class="chart-section" style="border-left: 4px solid {{ current_color }};">
+        <h3 style="color: {{ current_color }};">Análisis de Consumo - {{ section.title }}</h3>
+        <img src="file://{{ section.data.plot }}" alt="Gráfico de Consumo - {{ section.title }}" style="width: 100%; height: auto; object-fit: contain;">
+    </div>
+</div>

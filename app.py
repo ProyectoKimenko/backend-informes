@@ -1,119 +1,390 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-import matplotlib.pyplot as plt
-import os
-from analysis import analyze_data
-from pdf_generator import generate_pdf_report
-import tempfile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.requests import Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from scrape import fetch_page_info
-
+from jinja2 import Environment, FileSystemLoader
+from weasyprint import HTML
 from typing import List, Dict
+from datetime import datetime, timedelta
+import calendar
+import colorsys
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import pandas as pd
+import tempfile
 
+from src.analysis import analyze_data
+from src.scrape import fetch_page_info
+from src.report import Report
+from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
+
+# Initialize FastAPI app and templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory=tempfile.gettempdir()), name="static")
 
+# Constants
+WEEK_COLORS = {
+    'Semana 1': '#1fa9c9',
+    'Semana 2': '#34495e', 
+    'Semana 3': '#2ecc71',
+    'Semana 4': '#e67e22',
+    'Semana 5': '#9b59b6'
+}
+
+# Helper Functions
+def adjust_color_brightness(hex_color, factor):
+    """Adjust the brightness of a hex color"""
+    hex_color = hex_color.lstrip('#')
+    rgb = tuple(int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4))
+    hsv = colorsys.rgb_to_hsv(*rgb)
+    hsv = (hsv[0], hsv[1], min(1, hsv[2] * factor))
+    rgb = colorsys.hsv_to_rgb(*hsv)
+    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+
+def create_plot(data, title_prefix, date_str):
+    """Creates a time series plot showing total flow and lost flow.
+    
+    Args:
+        data: DataFrame containing flow rate data
+        title_prefix: String prefix for plot title
+        date_str: Date string to append to title
+        
+    Returns:
+        Path to saved plot image file
+    """
+    # Set figure size and style
+    plt.figure(figsize=(12, 6))
+    plt.style.use('default')  # Use default style instead of seaborn
+    
+    # Plot flow rate data
+    plt.plot(data.index, data['Flow rate'], 
+            label='Flujo total',
+            color='#1f77b4', 
+            linewidth=2)
+    plt.plot(data.index, data['RollingMin'],
+            label='Flujo perdido',
+            color='#d62728',
+            linestyle='--',
+            linewidth=1.5)
+    
+    # Configure plot formatting
+    plt.title(f'{title_prefix} - {date_str}', 
+             pad=20, 
+             fontsize=14)
+    plt.xlabel('Tiempo', fontsize=12)
+    plt.ylabel('Flujo (litros)', fontsize=12)
+    plt.grid(True, alpha=0.3)
+    plt.legend(frameon=True, 
+              fancybox=True,
+              shadow=True,
+              fontsize=10)
+    plt.tight_layout()
+    
+    # Save plot to temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+        plt.savefig(temp_file.name, dpi=300, bbox_inches='tight')
+        plt.close()
+    return temp_file.name
+
+def create_monthly_trend_plot(weeks_data):
+    # Extract data
+    weeks = [f"Semana {i + 1}" for i in range(len(weeks_data))]
+    weekday_consumptions = [week['weekday_consumption'] for week in weeks_data]
+    weekend_consumptions = [week['weekend_consumption'] for week in weeks_data]
+    weekday_efficiencies = [week['weekday_efficiency'] for week in weeks_data]
+    weekend_efficiencies = [week['weekend_efficiency'] for week in weeks_data]
+    weekday_losses = [week['weekday_wasted'] for week in weeks_data]
+    weekend_losses = [week['weekend_wasted'] for week in weeks_data]
+    colors = [week['color'] for week in weeks_data]
+
+    # Create figure with larger size
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
+    fig.suptitle('Tendencias Mensuales de Consumo de Agua', fontsize=20, y=0.95)
+
+    width = 0.35
+    x = np.arange(len(weeks))
+
+    # Consumption and Losses Plot (now showing actual consumption and losses separately)
+    ax1.bar(x - width / 2, [c - w for c, w in zip(weekday_consumptions, weekday_losses)], width, 
+            label='Consumo Laboral', color=colors)
+    ax1.bar(x + width / 2, [c - w for c, w in zip(weekend_consumptions, weekend_losses)], width, 
+            label='Consumo Fin de Semana', color=[adjust_color_brightness(c, 0.7) for c in colors])
+    ax1.bar(x - width / 2, weekday_losses, width, 
+            bottom=[c - w for c, w in zip(weekday_consumptions, weekday_losses)],
+            label='Pérdidas Laborales', color=[adjust_color_brightness(c, 0.5) for c in colors])
+    ax1.bar(x + width / 2, weekend_losses, width, 
+            bottom=[c - w for c, w in zip(weekend_consumptions, weekend_losses)],
+            label='Pérdidas Fin de Semana', color=[adjust_color_brightness(c, 0.3) for c in colors])
+    
+    ax1.set_ylabel('Litros', fontsize=14)
+    ax1.set_title('Consumo Total y Pérdidas por Semana', fontsize=16, pad=20)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(weeks, fontsize=12)
+    ax1.tick_params(axis='y', labelsize=12)
+    ax1.legend(fontsize=12, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # Efficiency Plot with larger markers and fonts
+    ax2.plot(weeks, weekday_efficiencies, marker='o', linewidth=3, markersize=12,
+             color='#1fa9c9', label='Eficiencia Laboral')
+    ax2.plot(weeks, weekend_efficiencies, marker='s', linewidth=3, markersize=12,
+             color='#34495e', label='Eficiencia Fin de Semana')
+    
+    for i, (weekday_eff, weekend_eff) in enumerate(zip(weekday_efficiencies, weekend_efficiencies)):
+        ax2.annotate(f'{weekday_eff}%', (weeks[i], weekday_eff),
+                    textcoords="offset points", xytext=(0, 15),
+                    ha='center', fontsize=11, weight='bold')
+        ax2.annotate(f'{weekend_eff}%', (weeks[i], weekend_eff),
+                    textcoords="offset points", xytext=(0, -20),
+                    ha='center', fontsize=11, weight='bold')
+    
+    ax2.set_ylabel('Porcentaje de Eficiencia', fontsize=14)
+    ax2.set_title('Eficiencia por Semana', fontsize=16, pad=20)
+    ax2.grid(True, linestyle='--', alpha=0.7)
+    ax2.set_ylim(0, 100)
+    ax2.tick_params(axis='both', labelsize=12)
+    ax2.legend(fontsize=12, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout(rect=[0, 0, 0.85, 0.95], h_pad=0.8)
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+        plt.savefig(temp_file.name, bbox_inches='tight', dpi=300)
+        plt.close()
+    return temp_file.name
+
+def generate_pdf_report(weekly_data):
+    env = Environment(loader=FileSystemLoader('templates'))
+    template_week = env.get_template('pdf_week.html')
+    
+    rendered_html = ""
+    for week in weekly_data:
+        rendered_html += template_week.render(
+            weekday_dates=week['dates'],
+            weekend_dates=week['dates'],
+            weekday_peak_day=week['weekday_peak_day'],
+            weekend_peak_day=week['weekend_peak_day'],
+            weekday_peak_consumption=week['weekday_peak_consumption'],
+            weekend_peak_consumption=week['weekend_peak_consumption'],
+            weekday_total_consumption=week['weekday_total'],
+            weekend_total_consumption=week['weekend_total'],
+            weekday_plot=week['weekday_plot'],
+            weekend_plot=week['weekend_plot']
+        )
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+        pdf_file = temp_file.name
+        HTML(string=rendered_html).write_pdf(pdf_file)
+    return pdf_file
+
+def get_weeks_of_month(year: int, month: int) -> List[tuple]:
+    first_day = datetime(year, month, 1)
+    _, num_days = calendar.monthrange(year, month)
+    last_day = datetime(year, month, num_days)
+    
+    current_day = first_day
+    while current_day.weekday() != 0:
+        current_day += timedelta(days=1)
+    
+    week_ranges = []
+    while current_day + timedelta(days=6) <= last_day:
+        week_start = current_day
+        week_end = current_day + timedelta(days=6)
+        if week_start.month == month and week_end.month == month:
+            week_ranges.append((week_start, week_end))
+        current_day += timedelta(days=7)
+    
+    return week_ranges
+
+# API Endpoints
 @app.get("/ping", status_code=200)
 def ping():
     return {"status": "success", "message": "Pong"}
 
 @app.get("/analysis", status_code=200)
 def analysis():
-    data, data_resampled = analyze_data()
-    return {"status": "success", "Total Water Wasted": data, "data_resampled": data_resampled}
-
-@app.get("/generate_pdf", status_code=200)
-async def generate_pdf(window_size: int = 60):
-    try:
-        total_water_wasted, data_resampled, efficiency_percentage, total_water_consumed = analyze_data(window_size)
-
-        plot_file = create_plot(data_resampled)
-        pdf_file = generate_pdf_report(plot_file, total_water_wasted, efficiency_percentage, total_water_consumed)
-        os.remove(plot_file)
-        
-        return FileResponse(pdf_file, media_type='application/pdf', filename='water_analysis.pdf')
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
+    total_water_wasted, data_resampled, total_water_consumed, efficiency_percentage = analyze_data()
+    return {
+        "status": "success", 
+        "total_water_wasted": total_water_wasted,
+        "total_water_consumed": total_water_consumed,
+        "efficiency_percentage": efficiency_percentage
+    }
 
 @app.get("/view_analysis", response_class=HTMLResponse)
 async def view_analysis(request: Request, window_size: int = 60):
     try:
-        total_water_wasted, data_resampled, total_water_consumed, efficiency_percentage = analyze_data(window_size)
+        analysis_results = analyze_data(window_size=window_size)
+        combined_data = pd.concat([
+            analysis_results['weekday_data'], 
+            analysis_results['weekend_data']
+        ])
         
-        # Creating the plot for display
-        plot_file = create_plot(data_resampled)
-        
-        # Generate the URL to access the plot image
+        plot_file = create_plot(
+            combined_data, 
+            'Análisis Completo', 
+            datetime.now().strftime('%Y-%m-%d')
+        )
         plot_url = f"/static/{os.path.basename(plot_file)}"
         
         return templates.TemplateResponse("analysis.html", {
             "request": request,
-            "total_water_wasted": total_water_wasted,
-            "efficiency_percentage": efficiency_percentage,
-            "total_water_consumed": total_water_consumed,
+            "total_water_wasted_weekdays": analysis_results['weekday_wasted'],
+            "efficiency_percentage_weekdays": analysis_results['weekday_efficiency'],
+            "total_water_consumed_weekdays": analysis_results['weekday_total'],
+            "total_water_wasted_weekends": analysis_results['weekend_wasted'],
+            "efficiency_percentage_weekends": analysis_results['weekend_efficiency'],
+            "total_water_consumed_weekends": analysis_results['weekend_total'],
             "plot_url": plot_url,
             "window_size": window_size
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# @app.get("/view_analysis", response_class=HTMLResponse)
-# async def view_analysis(request: Request, window_ranges: List[Dict[str, str]] = Query(None)):
-#     try:
-#         if not window_ranges:
-#             # Use default window size if no ranges are provided
-#             window_ranges = [
-#                 {'window_size': 60, 'timestamp_start': '2024-08-28 06:00:00', 'timestamp_end': '2024-08-28 18:00:00'}
-#             ]
-
-#         # Parse window_ranges to be passed into the analyze_data function
-#         total_water_wasted, data_resampled, total_water_consumed, efficiency_percentage = analyze_data(window_ranges)
-
-#         # Creating the plot for display
-#         plot_file = create_plot(data_resampled)
-
-#         # Generate the URL to access the plot image
-#         plot_url = f"/static/{os.path.basename(plot_file)}"
+@app.get("/generate_monthly_pdf", status_code=200)
+async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
+    try:
+        report = Report(
+            title=f"Informe Mensual de Consumo de Agua - {calendar.month_name[month]} {year}",
+            place_name="Your Location"
+        )
         
-#         return templates.TemplateResponse("analysis.html", {
-#             "request": request,
-#             "total_water_wasted": total_water_wasted,
-#             "efficiency_percentage": efficiency_percentage,
-#             "total_water_consumed": total_water_consumed,
-#             "plot_url": plot_url,
-#             "window_ranges": window_ranges
-#         })
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
+        week_ranges = get_weeks_of_month(year, month)
+        weeks_data = []
+        max_consumption = 0
+        max_wasted = 0
+        week_number = 1
+        
+        for start_date, end_date in week_ranges:
+            start_epoch = int(datetime.timestamp(start_date) * 1000)
+            end_epoch = int(datetime.timestamp(end_date) * 1000)
+            
+            analysis_results = analyze_data(
+                window_size=window_size,
+                start_epoch=start_epoch,
+                end_epoch=end_epoch
+            )
+            
+            # Create sections
+            weekday_section = WeekdaySection(f"Semana {week_number} - Días Laborales")
+            weekday_section.add_data("dates", f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}")
+            weekday_section.add_data("peak_day", analysis_results['weekday_peak']['day'])
+            weekday_section.add_data("peak_consumption", analysis_results['weekday_peak']['consumption'])
+            weekday_section.add_data("total_consumption", analysis_results['weekday_total'])
+            weekday_section.add_data("wasted", analysis_results['weekday_wasted'])
+            weekday_section.add_data("efficiency", analysis_results['weekday_efficiency'])
+            
+            weekend_section = WeekendSection(f"Semana {week_number} - Fin de Semana")
+            weekend_section.add_data("dates", f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}")
+            weekend_section.add_data("peak_day", analysis_results['weekend_peak']['day'])
+            weekend_section.add_data("peak_consumption", analysis_results['weekend_peak']['consumption'])
+            weekend_section.add_data("total_consumption", analysis_results['weekend_total'])
+            weekend_section.add_data("wasted", analysis_results['weekend_wasted'])
+            weekend_section.add_data("efficiency", analysis_results['weekend_efficiency'])
+            
+            week_data = {
+                'title': f"Semana {week_number}",
+                'dates': f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}",
+                'weekday_consumption': analysis_results['weekday_total'],
+                'weekend_consumption': analysis_results['weekend_total'],
+                'weekday_efficiency': analysis_results['weekday_efficiency'],
+                'weekend_efficiency': analysis_results['weekend_efficiency'],
+                'weekday_wasted': analysis_results['weekday_wasted'],
+                'weekend_wasted': analysis_results['weekend_wasted'],
+                'color': WEEK_COLORS.get(f'Semana {week_number}', '#1fa9c9')
+            }
+            weeks_data.append(week_data)
+            
+            max_consumption = max(max_consumption, 
+                                analysis_results['weekday_total'],
+                                analysis_results['weekend_total'])
+            max_wasted = max(max_wasted, 
+                           analysis_results['weekday_wasted'],
+                           analysis_results['weekend_wasted'])
+            
+            weekday_plot = create_plot(
+                analysis_results['weekday_data'],
+                'Días Laborales',
+                start_date.strftime('%Y-%m-%d')
+            )
+            weekend_plot = create_plot(
+                analysis_results['weekend_data'],
+                'Fin de Semana',
+                start_date.strftime('%Y-%m-%d')
+            )
+            
+            weekday_section.add_data("plot", weekday_plot)
+            weekend_section.add_data("plot", weekend_plot)
+            
+            report.add_section(weekday_section)
+            report.add_section(weekend_section)
+            
+            week_number += 1
 
+        comparison_section = ComparisonSection("Comparación Mensual")
+        comparison_section.add_data('weeks', weeks_data)
+        comparison_section.add_data('max_consumption', max_consumption)
+        comparison_section.add_data('max_wasted', max_wasted)
+        
+        monthly_trend_plot = create_monthly_trend_plot(weeks_data)
+        comparison_section.add_data('monthly_trend_plot', monthly_trend_plot)
+        
+        report.add_section(comparison_section)
+        
+        pdf_file = report.render()
+        
+        for section in report.sections:
+            if os.path.exists(section.data.get('plot', '')):
+                os.remove(section.data['plot'])
+        
+        return FileResponse(
+            pdf_file,
+            media_type='application/pdf',
+            filename=f'water_analysis_{year}_{month}.pdf'
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-
-@app.get("/fetch_page_info", status_code=200)
-async def get_page_info(url: str):
-    print(f"Fetching page info for URL: {url}")
-    title = fetch_page_info(url)  # Call the internal function to fetch the title
-    return {"status": "success", "title": title}
-
-
-def create_plot(data):
-    data_resampled_hour = data.resample('30T').mean()
-    plt.figure(figsize=(10, 6))
-    plt.plot(data_resampled_hour.index, data_resampled_hour['RollingMin'], label='Perdida de agua')
-    plt.plot(data_resampled_hour.index, data_resampled_hour['Flow rate'], label='Flujo de agua')
-    plt.title('Análisis de agua')
-    plt.ylabel('Cantidad (litros)')
-    plt.legend()
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
-        plt.savefig(temp_file.name)
-        plt.close()
+@app.get("/test_comparison_plot")
+async def test_comparison_plot():
+    test_weeks_data = [
+        {
+            'title': 'Semana 1',
+            'weekday_consumption': 1000,
+            'weekend_consumption': 800,
+            'weekday_efficiency': 85,
+            'weekend_efficiency': 80,
+            'weekday_wasted': 150,
+            'weekend_wasted': 160,
+            'color': WEEK_COLORS['Semana 1']
+        },
+        {
+            'title': 'Semana 2',
+            'weekday_consumption': 1200,
+            'weekend_consumption': 900,
+            'weekday_efficiency': 90,
+            'weekend_efficiency': 85,
+            'weekday_wasted': 120,
+            'weekend_wasted': 135,
+            'color': WEEK_COLORS['Semana 2']
+        },
+        {
+            'title': 'Semana 3',
+            'weekday_consumption': 950,
+            'weekend_consumption': 850,
+            'weekday_efficiency': 88,
+            'weekend_efficiency': 82,
+            'weekday_wasted': 114,
+            'weekend_wasted': 153,
+            'color': WEEK_COLORS['Semana 3']
+        }
+    ]
     
-    return temp_file.name
-
+    plot_file = create_monthly_trend_plot(test_weeks_data)
+    
+    return FileResponse(
+        plot_file,
+        media_type='image/png',
+        filename='test_comparison_plot.png'
+    )

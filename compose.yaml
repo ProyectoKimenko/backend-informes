@@ -17,6 +17,8 @@ services:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+      - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
+      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
     depends_on:
       - selenium
   selenium:
