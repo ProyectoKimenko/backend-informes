@@ -2,14 +2,14 @@ import pandas as pd
 from supabase import create_client
 import os
 
-def analyze_data(window_size=60, start_epoch=None, end_epoch=None):
+def analyze_data(table_name, window_size=60, start_epoch=None, end_epoch=None):
     # Initialize Supabase client
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_KEY")
     supabase = create_client(supabase_url, supabase_key)
 
     # Build query with filters if start/end epochs provided
-    query = supabase.table("refugioAleman").select("*")
+    query = supabase.table(table_name).select("*")
     if start_epoch is not None:
         query = query.gte("Category", start_epoch)
     if end_epoch is not None:

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -14,6 +14,7 @@ import numpy as np
 import os
 import pandas as pd
 import tempfile
+from supabase import create_client
 
 from src.analysis import analyze_data
 from src.scrape import fetch_page_info
@@ -44,46 +45,61 @@ def adjust_color_brightness(hex_color, factor):
     rgb = colorsys.hsv_to_rgb(*hsv)
     return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
 
+def split_at_gaps(index, values, mask):
+    time_diffs = np.diff(index[mask])
+    gaps = np.where(time_diffs > pd.Timedelta(minutes=1))[0]
+    segments = []
+    start_idx = 0
+    
+    for gap_idx in gaps:
+        end_idx = np.where(mask)[0][gap_idx + 1]
+        if end_idx > start_idx:
+            segment_mask = mask.copy()
+            segment_mask[end_idx:] = False
+            segment_mask[:start_idx] = False
+            if np.sum(segment_mask) > 1:  # Ensure more than one point
+                segments.append((index[segment_mask], values[segment_mask]))
+        start_idx = end_idx
+    
+    # Handle the last segment
+    segment_mask = mask.copy()
+    segment_mask[:start_idx] = False
+    if np.sum(segment_mask) > 1:
+        segments.append((index[segment_mask], values[segment_mask]))
+    
+    return segments
+
 def create_plot(data, title_prefix, date_str):
-    """Creates a time series plot showing total flow and lost flow.
-    
-    Args:
-        data: DataFrame containing flow rate data
-        title_prefix: String prefix for plot title
-        date_str: Date string to append to title
-        
-    Returns:
-        Path to saved plot image file
-    """
-    # Set figure size and style
     plt.figure(figsize=(12, 6))
-    plt.style.use('default')  # Use default style instead of seaborn
+    plt.style.use('default')
     
-    # Plot flow rate data
-    plt.plot(data.index, data['Flow rate'], 
-            label='Flujo total',
-            color='#1f77b4', 
-            linewidth=2)
-    plt.plot(data.index, data['RollingMin'],
-            label='Flujo perdido',
-            color='#d62728',
-            linestyle='--',
-            linewidth=1.5)
+    # Create masks for valid data
+    flow_mask = ~np.isnan(data['Flow rate'])
+    min_mask = ~np.isnan(data['RollingMin'])
+    min_mask = ~np.isnan(data['RollingMin'])
+    
+    # Plot flow rate segments
+    flow_segments = split_at_gaps(data.index, data['Flow rate'], flow_mask)
+    for x, y in flow_segments:
+        plt.plot(x, y, color='#1f77b4', linewidth=2, 
+                label='Flujo total' if x is flow_segments[0][0] else "")
+    
+    min_segments = split_at_gaps(data.index, data['RollingMin'], min_mask)
+    for x, y in min_segments:
+        if len(x) > 1:  # Ensure more than one point
+            plt.plot(x, y, color='#d62728', linewidth=2, 
+                    label='Límite de desperdicio' if x is min_segments[0][0] else "")
+            plt.fill_between(x, 0, y, color='#d62728', alpha=0.3,
+                            label='Flujo desperdiciado' if x is min_segments[0][0] else "")
     
     # Configure plot formatting
-    plt.title(f'{title_prefix} - {date_str}', 
-             pad=20, 
-             fontsize=14)
+    plt.title(f'{title_prefix} - {date_str}', pad=20, fontsize=14)
     plt.xlabel('Tiempo', fontsize=12)
     plt.ylabel('Flujo (litros)', fontsize=12)
     plt.grid(True, alpha=0.3)
-    plt.legend(frameon=True, 
-              fancybox=True,
-              shadow=True,
-              fontsize=10)
+    plt.legend(frameon=True, fancybox=True, shadow=True, fontsize=10)
     plt.tight_layout()
     
-    # Save plot to temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
         plt.savefig(temp_file.name, dpi=300, bbox_inches='tight')
         plt.close()
@@ -197,6 +213,35 @@ def get_weeks_of_month(year: int, month: int) -> List[tuple]:
     
     return week_ranges
 
+# Function to get table names from Supabase
+def get_table_names():
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    supabase = create_client(supabase_url, supabase_key)
+    
+    # Directly query the information schema for table names
+    query = """
+    SELECT tablename
+    FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public';
+    """
+    
+    response = supabase.sql(query).execute()
+    if response.error:
+        raise Exception(response.error.message)
+    
+    # Extract table names
+    table_names = [table['tablename'] for table in response.data]
+    return table_names
+
+@app.get("/tables", response_class=JSONResponse)
+async def fetch_tables():
+    try:
+        table_names = get_table_names()
+        return {"tables": table_names}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # API Endpoints
 @app.get("/ping", status_code=200)
 def ping():
@@ -213,34 +258,71 @@ def analysis():
     }
 
 @app.get("/view_analysis", response_class=HTMLResponse)
-async def view_analysis(request: Request, window_size: int = 60):
+async def view_analysis(
+    request: Request, 
+    table_name: str = "refugioAleman",  # Default value set here
+    window_size: int = 60, 
+    month: int = None, 
+    year: int = None
+):
     try:
-        analysis_results = analyze_data(window_size=window_size)
+        # If month/year not provided, use current date
+        if month is None or year is None:
+            now = datetime.now()
+            month = now.month
+            year = now.year
+            
+        # Calculate epoch timestamps for start/end of month
+        start_date = datetime(year, month, 1)
+        _, last_day = calendar.monthrange(year, month)
+        end_date = datetime(year, month, last_day, 23, 59, 59)
+        
+        start_epoch = int(datetime.timestamp(start_date) * 1000)
+        end_epoch = int(datetime.timestamp(end_date) * 1000)
+
+        analysis_results = analyze_data(
+            table_name=table_name,
+            window_size=window_size, 
+            start_epoch=start_epoch,
+            end_epoch=end_epoch
+        )
+                                      
         combined_data = pd.concat([
-            analysis_results['weekday_data'], 
+            analysis_results['weekday_data'],
             analysis_results['weekend_data']
         ])
         
         plot_file = create_plot(
-            combined_data, 
-            'Análisis Completo', 
-            datetime.now().strftime('%Y-%m-%d')
+            combined_data,
+            f'Análisis {calendar.month_name[month]} {year}',
+            f'{year}-{month:02d}'
         )
         plot_url = f"/static/{os.path.basename(plot_file)}"
         
         return templates.TemplateResponse("analysis.html", {
             "request": request,
             "total_water_wasted_weekdays": analysis_results['weekday_wasted'],
-            "efficiency_percentage_weekdays": analysis_results['weekday_efficiency'],
+            "efficiency_percentage_weekdays": analysis_results['weekday_efficiency'], 
             "total_water_consumed_weekdays": analysis_results['weekday_total'],
             "total_water_wasted_weekends": analysis_results['weekend_wasted'],
             "efficiency_percentage_weekends": analysis_results['weekend_efficiency'],
             "total_water_consumed_weekends": analysis_results['weekend_total'],
             "plot_url": plot_url,
-            "window_size": window_size
+            "window_size": window_size,
+            "month": month,
+            "year": year,
+            "error_message": None  # No error
         })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Pass the error message to the template
+        return templates.TemplateResponse("analysis.html", {
+            "request": request,
+            "error_message": f"An error occurred: {str(e)}",
+            "plot_url": None,  # No plot to display
+            "window_size": window_size,
+            "month": month,
+            "year": year
+        })
 
 @app.get("/generate_monthly_pdf", status_code=200)
 async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):

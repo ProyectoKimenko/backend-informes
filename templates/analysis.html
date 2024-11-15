@@ -1,70 +1,178 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte de Análisis de Agua</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container mx-auto">
-        <h1 class="text-center text-blue-500 text-2xl mb-6">Reporte de Análisis de Agua</h1>
-        <h1 class="text-center">Tamaño de ventana actual en minutos <strong class="text-red-500 font-size-30">{{window_size}}</strong></h1>
-        <div class="mt-6 text-center">
-            <img src="{{ plot_url }}" alt="Water Analysis Plot" class="mx-auto" style="width: 50%; height: auto;">
-        </div>
-        <div class="justify-center flex-row flex">
-            <form action="/view_analysis" method="get" class="bg-white p-4 rounded-lg shadow-lg w-1/4">
-                <div class="mb-3">
-                    <label for="window_size" class="block text-gray-700 text-sm font-bold mb-1">Tamaño de la ventana:</label>
-                    <input type="number" id="window_size" name="window_size" value="60" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="1000">
-                </div>
-                <div class="mb-3">
-                    <label for="month" class="block text-gray-700 text-sm font-bold mb-1">Mes:</label>
-                    <input type="number" id="month" name="month" value="1" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="12">
-                </div>
-                <div class="mb-3">
-                    <label for="year" class="block text-gray-700 text-sm font-bold mb-1">Año:</label>
-                    <input type="number" id="year" name="year" value="2024" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="2000" max="2100">
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <input type="submit" value="Preview" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
-                </div>
-            </form>
-
-            <form action="/generate_monthly_pdf" method="get" class="bg-white p-4 rounded-lg shadow-lg ml-4 w-1/4">
-                <div class="mb-3">
-                    <label for="window_size" class="block text-gray-700 text-sm font-bold mb-1">Tamaño de la ventana:</label>
-                    <input type="number" id="window_size" name="window_size" value="60" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="1000">
-                </div>
-                <div class="mb-3">
-                    <label for="month" class="block text-gray-700 text-sm font-bold mb-1">Mes:</label>
-                    <input type="number" id="month" name="month" value="1" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" max="12">
-                </div>
-                <div class="mb-3">
-                    <label for="year" class="block text-gray-700 text-sm font-bold mb-1">Año:</label>
-                    <input type="number" id="year" name="year" value="2024" class="shadow appearance-none border rounded w-full py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="2000" max="2100">
-                </div>
-
-                <div class="flex items-center justify-between">
-                    <input type="submit" value="Generate Monthly PDF" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline">
-                </div>
-            </form>
+<body class="font-['Roboto'] text-gray-700 leading-relaxed p-10">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="flex justify-between items-center border-b-2 border-cyan-500 pb-5 mb-10">
+            <div class="w-48">
+                <img src="https://kimenko.cl/wp-content/uploads/2020/06/cropped-logo3.jpg" alt="Company Logo" class="w-full">
+            </div>
+            <div class="text-right text-gray-600">
+                <h1 class="text-3xl font-bold mb-2">Reporte de Análisis de Agua</h1>
+                <p>Tamaño de ventana: <span class="text-cyan-500 font-bold">{{window_size}} minutos</span></p>
+            </div>
         </div>
 
-        <div class="mt-6 bg-blue-500 text-white p-4 rounded-lg shadow-lg">
-            <h2 class="text-center text-lg mb-3">Results</h2>
-            <h3 class="text-center text-base mb-2">Días Laborales (Lunes-Viernes)</h3>
-            <p class="text-center text-base mb-2"><strong>Total Agua Perdida:</strong> {{ total_water_wasted_weekdays }}</p>
-            <p class="text-center text-base mb-2"><strong>Porcentaje de Ineficiencia:</strong> {{ efficiency_percentage_weekdays }}%</p>
-            <p class="text-center text-base mb-2"><strong>Total Agua Consumida:</strong> {{ total_water_consumed_weekdays }}</p>
-            
-            <h3 class="text-center text-base mt-4 mb-2">Fines de Semana (Sábado-Domingo)</h3>
-            <p class="text-center text-base mb-2"><strong>Total Agua Perdida:</strong> {{ total_water_wasted_weekends }}</p>
-            <p class="text-center text-base mb-2"><strong>Porcentaje de Ineficiencia:</strong> {{ efficiency_percentage_weekends }}%</p>
-            <p class="text-center text-base mb-2"><strong>Total Agua Consumida:</strong> {{ total_water_consumed_weekends }}</p>
+        <!-- Error Message -->
+        {% if error_message %}
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-10" role="alert">
+            <p>{{ error_message }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Chart Section -->
+        {% if plot_url %}
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-10">
+            <h4 class="text-xl font-bold text-gray-800 mb-6 text-center">Análisis Gráfico del Consumo</h4>
+            <img src="{{ plot_url }}" alt="Water Analysis Plot" class="w-full max-w-4xl mx-auto rounded-lg shadow-md">
+        </div>
+        {% endif %}
+
+        <!-- Controls -->
+        <div class="flex justify-center mb-10">
+            <form class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg" id="analysisForm">
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label for="table_name" class="block text-sm font-bold mb-2">Lugar:</label>
+                        <select id="table_name" name="table_name" 
+                                class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
+                            <option value="refugioAleman" selected>Refugio Alemán</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="window_size" class="block text-sm font-bold mb-2">Tamaño de ventana:</label>
+                        <input type="number" id="window_size" name="window_size" value="{{ window_size }}" 
+                               class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                               min="1" max="1000">
+                    </div>
+                    <div>
+                        <label for="month" class="block text-sm font-bold mb-2">Mes:</label>
+                        <input type="number" id="month" name="month" value="{{ month if month else 1 }}" 
+                               class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                               min="1" max="12">
+                    </div>
+                    <div>
+                        <label for="year" class="block text-sm font-bold mb-2">Año:</label>
+                        <input type="number" id="year" name="year" value="{{ year if year else 2024 }}" 
+                               class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                               min="2000" max="2100">
+                    </div>
+                </div>
+                <div class="flex space-x-4">
+                    <button type="button" onclick="previewForm()" 
+                            class="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded">
+                        Vista Previa
+                    </button>
+                    <button type="button" onclick="submitForm('/view_analysis')" 
+                            class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                        Aplicar
+                    </button>
+                    <button type="button" onclick="submitForm('/generate_monthly_pdf')" 
+                            class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+                        Generar PDF
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid md:grid-cols-2 gap-6 mb-10">
+            <!-- Weekday Metrics -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-cyan-500 mb-4">Días Laborales (Lunes-Viernes)</h3>
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Total Agua Perdida</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ total_water_wasted_weekdays }}</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Porcentaje de Eficiencia</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ efficiency_percentage_weekdays }}%</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Total Agua Consumida</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ total_water_consumed_weekdays }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weekend Metrics -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-cyan-500 mb-4">Fines de Semana (Sábado-Domingo)</h3>
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Total Agua Perdida</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ total_water_wasted_weekends }}</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Porcentaje de Eficiencia</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ efficiency_percentage_weekends }}%</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600">Total Agua Consumida</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ total_water_consumed_weekends }}</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <script>
+        async function fetchTableNames() {
+            try {
+                const response = await fetch('/tables');
+                const data = await response.json();
+                const tableSelect = document.getElementById('table_name');
+                
+                data.tables.forEach(table => {
+                    const option = document.createElement('option');
+                    option.value = table;
+                    option.textContent = table;
+                    tableSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching table names:', error);
+            }
+        }
+
+        window.onload = function() {
+            fetchTableNames();
+
+            const savedWindowSize = localStorage.getItem('window_size');
+            const savedMonth = localStorage.getItem('month');
+            const savedYear = localStorage.getItem('year');
+
+            if (savedWindowSize) document.getElementById('window_size').value = savedWindowSize;
+            if (savedMonth) document.getElementById('month').value = savedMonth;
+            if (savedYear) document.getElementById('year').value = savedYear;
+        };
+
+        function previewForm() {
+            const form = document.getElementById('analysisForm');
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData);
+            
+            // Open preview in new window/tab
+            window.open(`/view_analysis?${params.toString()}`, '_blank');
+        }
+
+        function submitForm(endpoint) {
+            const form = document.getElementById('analysisForm');
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData);
+            window.location.href = `${endpoint}?${params.toString()}`;
+            
+            localStorage.setItem('window_size', formData.get('window_size'));
+            localStorage.setItem('month', formData.get('month'));
+            localStorage.setItem('year', formData.get('year'));
+        }
+    </script>
 </body>
 </html>
