@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from datetime import datetime, timedelta
 import calendar
 import colorsys
@@ -133,8 +133,8 @@ def create_plot(data, title_prefix, date_str):
         logger.info(f"Plot saved to temporary file: {temp_file.name}")
     return temp_file.name
 
-def create_monthly_trend_plot(weeks_data):
-    logger.info(f"Creating monthly trend plot with {len(weeks_data)} weeks of data")
+def create_weekly_trend_plot(weeks_data):
+    logger.info(f"Creating weekly trend plot with {len(weeks_data)} weeks of data")
     # Extract data
     weeks = [f"Semana {i + 1}" for i in range(len(weeks_data))]
     weekday_consumptions = [week['weekday_consumption'] for week in weeks_data]
@@ -152,7 +152,7 @@ def create_monthly_trend_plot(weeks_data):
 
     # Create figure with larger size
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
-    fig.suptitle('Tendencias Mensuales de Consumo de Agua', fontsize=20, y=0.95)
+    fig.suptitle('Tendencias Semanales de Consumo de Agua', fontsize=20, y=0.95)
 
     width = 0.35
     x = np.arange(len(weeks))
@@ -202,7 +202,7 @@ def create_monthly_trend_plot(weeks_data):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
         plt.savefig(temp_file.name, bbox_inches='tight', dpi=300)
         plt.close()
-        logger.info(f"Monthly trend plot saved to: {temp_file.name}")
+        logger.info(f"Weekly trend plot saved to: {temp_file.name}")
     return temp_file.name
 
 def generate_pdf_report(weekly_data):
@@ -232,25 +232,37 @@ def generate_pdf_report(weekly_data):
         logger.info(f"PDF report generated at: {pdf_file}")
     return pdf_file
 
-def get_weeks_of_month(year: int, month: int) -> List[tuple]:
-    logger.info(f"Getting weeks for {year}-{month}")
-    first_day = datetime(year, month, 1)
-    _, num_days = calendar.monthrange(year, month)
-    last_day = datetime(year, month, num_days)
+def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List[Tuple[datetime, datetime]]:
+    """
+    Get start and end dates for specified week number(s).
+    Weeks start on Monday and end on Sunday based on ISO week numbering.
     
-    current_day = first_day
-    while current_day.weekday() != 0:
-        current_day += timedelta(days=1)
-    
+    Args:
+        year (int): The year.
+        week (int): The ISO week number.
+        num_weeks (int): Number of consecutive weeks to retrieve.
+
+    Returns:
+        List[Tuple[datetime, datetime]]: List of tuples containing (start_date, end_date) for each week.
+    """
     week_ranges = []
-    while current_day + timedelta(days=6) <= last_day:
-        week_start = current_day
-        week_end = current_day + timedelta(days=6)
-        if week_start.month == month and week_end.month == month:
-            week_ranges.append((week_start, week_end))
-        current_day += timedelta(days=7)
+    for i in range(num_weeks):
+        current_week = week + i
+        try:
+            # Handle week overflow (e.g., week 53 in some years)
+            iso_calendar = datetime.fromisocalendar(year, current_week, 1)
+        except ValueError:
+            # If the current_week exceeds the number of weeks in the year, reset to week 1 of the next year
+            iso_calendar = datetime.fromisocalendar(year + 1, 1, 1)
+            current_week = 1
+        
+        # Start date: Monday
+        week_start = datetime.fromisocalendar(iso_calendar.year, current_week, 1)
+        # End date: Sunday at 23:59:59
+        week_end = datetime.fromisocalendar(iso_calendar.year, current_week, 7).replace(hour=23, minute=59, second=59)
+        week_ranges.append((week_start, week_end))
+        logger.info(f"Week {current_week} of {iso_calendar.year}: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}")
     
-    logger.debug(f"Found {len(week_ranges)} complete weeks")
     return week_ranges
 
 # Function to get table names from Supabase
@@ -320,25 +332,30 @@ async def view_analysis(
     request: Request, 
     table_name: str = "refugioAleman",
     window_size: int = 60, 
-    month: int = None, 
+    start_week: int = None, 
     year: int = None
 ):
-    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, month={month}, year={year}")
+    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}")
     try:
-        # If month/year not provided, use current date
-        if month is None or year is None:
+        # If week/year not provided, use current date
+        if start_week is None or year is None:
             now = datetime.now()
-            month = now.month
             year = now.year
-            logger.info(f"Using current date: month={month}, year={year}")
+            start_week = now.isocalendar()[1]  # Get current ISO week number
+            logger.info(f"Using current date: week={start_week}, year={year}")
             
-        # Calculate epoch timestamps for start/end of month
-        start_date = datetime(year, month, 1)
-        _, last_day = calendar.monthrange(year, month)
-        end_date = datetime(year, month, last_day, 23, 59, 59)
+        # Get week ranges
+        week_ranges = get_dates_from_week_number(year, start_week)
+        if not week_ranges:
+            error_msg = f"No valid weeks found starting from week {start_week} of {year}."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
         
-        start_epoch = int(datetime.timestamp(start_date) * 1000)
-        end_epoch = int(datetime.timestamp(end_date) * 1000)
+        start_date = week_ranges[0][0]  # Start of first week
+        end_date = week_ranges[-1][1]   # End of last week
+        
+        start_epoch = int(start_date.timestamp() * 1000)
+        end_epoch = int(end_date.timestamp() * 1000)
         logger.info(f"Calculated epochs: start={start_epoch}, end={end_epoch}")
 
         logger.info("Calling analyze_data function")
@@ -353,10 +370,10 @@ async def view_analysis(
             # No data found for the selected period
             return templates.TemplateResponse("analysis.html", {
                 "request": request,
-                "error_message": f"No se encontraron datos para el período seleccionado: {calendar.month_name[month]} {year}",
+                "error_message": f"No se encontraron datos para el período seleccionado: Semanas {start_week}-{start_week+3}, {year}",
                 "plot_url": None,
                 "window_size": window_size,
-                "month": month,
+                "start_week": start_week,
                 "year": year,
                 "total_water_wasted_weekdays": 0,
                 "efficiency_percentage_weekdays": 0,
@@ -376,8 +393,8 @@ async def view_analysis(
         logger.info("Creating plot")
         plot_file = create_plot(
             combined_data,
-            f'Análisis {calendar.month_name[month]} {year}',
-            f'{year}-{month:02d}'
+            f'Análisis Semanas {start_week}-{start_week+3} - {year}',
+            f'{year}-W{start_week:02d}'
         )
         plot_url = f"/static/{os.path.basename(plot_file)}"
         logger.info(f"Plot created at: {plot_url}")
@@ -392,43 +409,56 @@ async def view_analysis(
             "total_water_consumed_weekends": analysis_results['weekend_total'],
             "plot_url": plot_url,
             "window_size": window_size,
-            "month": month,
+            "start_week": start_week,
             "year": year,
-            "error_message": None  # No error
+            "error_message": None
         })
     except Exception as e:
         logger.error(f"Error in view_analysis: {str(e)}", exc_info=True)
-        # Pass the error message to the template
         return templates.TemplateResponse("analysis.html", {
             "request": request,
             "error_message": f"An error occurred: {str(e)}",
-            "plot_url": None,  # No plot to display
+            "plot_url": None,
             "window_size": window_size,
-            "month": month,
+            "start_week": start_week,
             "year": year
         })
 
-@app.get("/generate_monthly_pdf", status_code=200)
-async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
-    logger.info(f"Starting generate_monthly_pdf with params: month={month}, year={year}, window_size={window_size}")
+@app.get("/generate_weekly_pdf", status_code=200)
+async def generate_weekly_pdf(
+    year: int,
+    start_week: int,
+    window_size: int = 60
+):
+    logger.info(f"Starting generate_weekly_pdf with params: year={year}, start_week={start_week}, window_size={window_size}")
     try:
+        # Validate inputs
+        if not 1 <= start_week <= 53:
+            error_msg = f"Invalid week number: {start_week}. Must be between 1 and 53."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Get 4 week ranges
+        week_ranges = get_dates_from_week_number(year, start_week, num_weeks=4)
+        if not week_ranges:
+            error_msg = f"No valid weeks found starting from week {start_week} of {year}."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+        
         report = Report(
-            title=f"Informe Mensual de Consumo de Agua - {calendar.month_name[month]} {year}",
+            title=f"Informe de Consumo de Agua - Semanas {start_week}-{start_week + 3}, {year}",
             place_name="Your Location"
         )
-        
-        week_ranges = get_weeks_of_month(year, month)
-        logger.info(f"Got {len(week_ranges)} weeks for month {month}")
         
         weeks_data = []
         max_consumption = 0
         max_wasted = 0
-        week_number = 1
         
-        for start_date, end_date in week_ranges:
-            logger.info(f"Processing week {week_number}: {start_date} to {end_date}")
-            start_epoch = int(datetime.timestamp(start_date) * 1000)
-            end_epoch = int(datetime.timestamp(end_date) * 1000)
+        for i, (week_start, week_end) in enumerate(week_ranges):
+            week_number = start_week + i
+            logger.info(f"Processing week {week_number}: {week_start} to {week_end}")
+            start_epoch = int(week_start.timestamp() * 1000)
+            end_epoch = int(week_end.timestamp() * 1000)
             
             analysis_results = analyze_data(
                 window_size=window_size,
@@ -439,7 +469,7 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
             
             # Create sections
             weekday_section = WeekdaySection(f"Semana {week_number} - Días Laborales")
-            weekday_section.add_data("dates", f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}")
+            weekday_section.add_data("dates", f"{week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}")
             weekday_section.add_data("peak_day", analysis_results['weekday_peak']['day'])
             weekday_section.add_data("peak_consumption", analysis_results['weekday_peak']['consumption'])
             weekday_section.add_data("total_consumption", analysis_results['weekday_total'])
@@ -447,42 +477,45 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
             weekday_section.add_data("efficiency", analysis_results['weekday_efficiency'])
             
             weekend_section = WeekendSection(f"Semana {week_number} - Fin de Semana")
-            weekend_section.add_data("dates", f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}")
+            weekend_section.add_data("dates", f"{week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}")
             weekend_section.add_data("peak_day", analysis_results['weekend_peak']['day'])
             weekend_section.add_data("peak_consumption", analysis_results['weekend_peak']['consumption'])
             weekend_section.add_data("total_consumption", analysis_results['weekend_total'])
             weekend_section.add_data("wasted", analysis_results['weekend_wasted'])
             weekend_section.add_data("efficiency", analysis_results['weekend_efficiency'])
             
+            # Add data for comparison section
             week_data = {
                 'title': f"Semana {week_number}",
-                'dates': f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}",
+                'dates': f"{week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}",
                 'weekday_consumption': analysis_results['weekday_total'],
                 'weekend_consumption': analysis_results['weekend_total'],
                 'weekday_efficiency': analysis_results['weekday_efficiency'],
                 'weekend_efficiency': analysis_results['weekend_efficiency'],
                 'weekday_wasted': analysis_results['weekday_wasted'],
                 'weekend_wasted': analysis_results['weekend_wasted'],
-                'color': WEEK_COLORS.get(f'Semana {week_number}', '#1fa9c9')
+                'color': WEEK_COLORS.get(f'Semana {week_number - start_week + 1}', '#1fa9c9')
             }
             weeks_data.append(week_data)
             
+            # Update maximums
             max_consumption = max(max_consumption, 
-                                analysis_results['weekday_total'],
-                                analysis_results['weekend_total'])
+                                  analysis_results['weekday_total'],
+                                  analysis_results['weekend_total'])
             max_wasted = max(max_wasted, 
-                           analysis_results['weekday_wasted'],
-                           analysis_results['weekend_wasted'])
+                             analysis_results['weekday_wasted'],
+                             analysis_results['weekend_wasted'])
             
+            # Create plots
             weekday_plot = create_plot(
                 analysis_results['weekday_data'],
                 'Días Laborales',
-                start_date.strftime('%Y-%m-%d')
+                week_start.strftime('%Y-%m-%d')
             )
             weekend_plot = create_plot(
                 analysis_results['weekend_data'],
                 'Fin de Semana',
-                start_date.strftime('%Y-%m-%d')
+                week_start.strftime('%Y-%m-%d')
             )
             
             weekday_section.add_data("plot", weekday_plot)
@@ -490,38 +523,29 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
             
             report.add_section(weekday_section)
             report.add_section(weekend_section)
-            
-            week_number += 1
-
-        comparison_section = ComparisonSection("Comparación Mensual")
+        
+        # Add comparison section
+        comparison_section = ComparisonSection("Comparación de Semanas")
         comparison_section.add_data('weeks', weeks_data)
         comparison_section.add_data('max_consumption', max_consumption)
         comparison_section.add_data('max_wasted', max_wasted)
         
-        monthly_trend_plot = create_monthly_trend_plot(weeks_data)
-        comparison_section.add_data('monthly_trend_plot', monthly_trend_plot)
+        weekly_trend_plot = create_weekly_trend_plot(weeks_data)
+        comparison_section.add_data('weekly_trend_plot', weekly_trend_plot)
         
         report.add_section(comparison_section)
         
         pdf_file = report.render()
         logger.info(f"PDF report rendered successfully: {pdf_file}")
         
-        # Cleanup temporary plot files
-        for section in report.sections:
-            if os.path.exists(section.data.get('plot', '')):
-                try:
-                    os.remove(section.data['plot'])
-                    logger.debug(f"Removed temporary plot file: {section.data['plot']}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove temporary plot file: {e}")
-        
         return FileResponse(
             pdf_file,
             media_type='application/pdf',
-            filename=f'water_analysis_{year}_{month}.pdf'
+            filename=f'water_analysis_weeks_{start_week}-{start_week + 3}_{year}.pdf'
         )
+        
     except Exception as e:
-        logger.error(f"Error generating monthly PDF: {str(e)}", exc_info=True)
+        logger.error(f"Error generating weekly PDF: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test_comparison_plot")
@@ -561,7 +585,7 @@ async def test_comparison_plot():
     ]
     
     logger.debug("Creating test comparison plot with sample data")
-    plot_file = create_monthly_trend_plot(test_weeks_data)
+    plot_file = create_weekly_trend_plot(test_weeks_data)
     logger.info(f"Test comparison plot created: {plot_file}")
     
     return FileResponse(
@@ -569,3 +593,48 @@ async def test_comparison_plot():
         media_type='image/png',
         filename='test_comparison_plot.png'
     )
+
+@app.get("/check_weeks", response_class=JSONResponse)
+async def check_weeks(year: int):
+    """Check which weeks have data in the specified year"""
+    logger.info(f"Checking data availability for weeks in {year}")
+    try:
+        weeks_data = {}
+        
+        # Get the total number of ISO weeks in the year
+        last_day = datetime(year, 12, 28)  # Use December 28th to ensure we're in the last week
+        total_weeks = last_day.isocalendar()[1]
+        
+        # Check each week of the year
+        for week in range(1, total_weeks + 1):
+            week_start = datetime.fromisocalendar(year, week, 1)  # Monday
+            week_end = datetime.fromisocalendar(year, week, 7)    # Sunday
+            week_end = week_end.replace(hour=23, minute=59, second=59)
+            
+            start_epoch = int(week_start.timestamp() * 1000)
+            end_epoch = int(week_end.timestamp() * 1000)
+            
+            # Query Supabase for data in this week's range
+            supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
+            response = supabase.table("refugioAleman") \
+                .select("*") \
+                .gte("Category", start_epoch) \
+                .lte("Category", end_epoch) \
+                .execute()
+                
+            has_data = len(response.data) > 100
+            
+            weeks_data[week] = {
+                'has_data': has_data,
+                'start_date': week_start.strftime('%Y-%m-%d'),
+                'end_date': week_end.strftime('%Y-%m-%d'),
+                'records': len(response.data)
+            }
+            
+            logger.debug(f"Week {week}: {has_data} ({len(response.data)} records)")
+        
+        return {"year": year, "weeks": weeks_data}
+        
+    except Exception as e:
+        logger.error(f"Error checking weeks: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
