@@ -51,3 +51,586 @@ KeyError: 'Category'
 2024-12-11 02:47:56,313 - app - INFO - [app.py:258] - Fetching table names from Supabase
 2024-12-11 02:47:56,452 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
 2024-12-11 02:47:56,453 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:52:15,964 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:52:15,971 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:53:00,964 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 02:53:00,971 - app - INFO - [app.py:333] - Using current date: month=12, year=2024
+2024-12-11 02:53:00,974 - app - INFO - [app.py:342] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 02:53:00,974 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 02:53:00,975 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1733011200000, end=1735689599000
+2024-12-11 02:53:03,165 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733011200000&Category=lte.1735689599000 "HTTP/2 200 OK"
+2024-12-11 02:53:03,244 - src.analysis - WARNING - [analysis.py:28] - No data returned from query
+2024-12-11 02:53:03,249 - app - INFO - [app.py:350] - Successfully got analysis results
+2024-12-11 02:53:03,262 - app - INFO - [app.py:357] - Creating plot
+2024-12-11 02:53:03,264 - app - INFO - [app.py:96] - Creating plot for Análisis December 2024 - 2024-12
+2024-12-11 02:53:03,341 - app - ERROR - [app.py:381] - Error in view_analysis: 'Flow rate'
+Traceback (most recent call last):
+  File "/app/app.py", line 358, in view_analysis
+    plot_file = create_plot(
+                ^^^^^^^^^^^^
+  File "/app/app.py", line 101, in create_plot
+    flow_mask = ~np.isnan(data['Flow rate'])
+                          ~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 417, in get_loc
+    raise KeyError(key)
+KeyError: 'Flow rate'
+2024-12-11 02:53:03,670 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 02:53:03,678 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 02:53:03,882 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:53:03,885 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:56:24,107 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:56:24,113 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:57:02,113 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:57:02,124 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:57:07,049 - app - INFO - [app.py:333] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 02:57:07,053 - app - INFO - [app.py:340] - Using current date: month=12, year=2024
+2024-12-11 02:57:07,054 - app - INFO - [app.py:349] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 02:57:07,057 - app - INFO - [app.py:351] - Calling analyze_data function
+2024-12-11 02:57:07,058 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1733011200000, end=1735689599000
+2024-12-11 02:57:08,931 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733011200000&Category=lte.1735689599000 "HTTP/2 200 OK"
+2024-12-11 02:57:09,031 - src.analysis - WARNING - [analysis.py:28] - No data returned from query
+2024-12-11 02:57:09,037 - app - INFO - [app.py:357] - Successfully got analysis results
+2024-12-11 02:57:09,053 - app - INFO - [app.py:364] - Creating plot
+2024-12-11 02:57:09,056 - app - INFO - [app.py:96] - Creating plot for Análisis December 2024 - 2024-12
+2024-12-11 02:57:09,099 - app - ERROR - [app.py:106] - Flow rate column not found. Available columns: []
+2024-12-11 02:57:09,100 - app - ERROR - [app.py:388] - Error in view_analysis: 'Flow rate column not found in data. Available columns: []'
+Traceback (most recent call last):
+  File "/app/app.py", line 365, in view_analysis
+    plot_file = create_plot(
+                ^^^^^^^^^^^^
+  File "/app/app.py", line 107, in create_plot
+    raise KeyError(f"Flow rate column not found in data. Available columns: {data.columns.tolist()}")
+KeyError: 'Flow rate column not found in data. Available columns: []'
+2024-12-11 02:57:09,410 - app - INFO - [app.py:299] - Handling /tables request
+2024-12-11 02:57:09,412 - app - INFO - [app.py:265] - Fetching table names from Supabase
+2024-12-11 02:57:09,596 - app - ERROR - [app.py:294] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:57:09,597 - app - ERROR - [app.py:304] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:57:35,256 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:57:35,261 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:57:35,343 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 02:57:35,344 - app - INFO - [app.py:333] - Using current date: month=12, year=2024
+2024-12-11 02:57:35,345 - app - INFO - [app.py:342] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 02:57:35,345 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 02:57:35,346 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1733011200000, end=1735689599000
+2024-12-11 02:57:36,777 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733011200000&Category=lte.1735689599000 "HTTP/2 200 OK"
+2024-12-11 02:57:36,841 - src.analysis - WARNING - [analysis.py:28] - No data returned from query
+2024-12-11 02:57:36,844 - app - INFO - [app.py:350] - Successfully got analysis results
+2024-12-11 02:57:36,852 - app - INFO - [app.py:357] - Creating plot
+2024-12-11 02:57:36,853 - app - INFO - [app.py:96] - Creating plot for Análisis December 2024 - 2024-12
+2024-12-11 02:57:36,888 - app - ERROR - [app.py:381] - Error in view_analysis: 'Flow rate'
+Traceback (most recent call last):
+  File "/app/app.py", line 358, in view_analysis
+    plot_file = create_plot(
+                ^^^^^^^^^^^^
+  File "/app/app.py", line 101, in create_plot
+    flow_mask = ~np.isnan(data['Flow rate'])
+                          ~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 417, in get_loc
+    raise KeyError(key)
+KeyError: 'Flow rate'
+2024-12-11 02:57:37,182 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 02:57:37,185 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 02:57:37,376 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:57:37,377 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:59:13,043 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:59:13,049 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:59:13,155 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 02:59:13,162 - app - INFO - [app.py:333] - Using current date: month=12, year=2024
+2024-12-11 02:59:13,169 - app - INFO - [app.py:342] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 02:59:13,173 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 02:59:13,176 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1733011200000, end=1735689599000
+2024-12-11 02:59:14,676 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733011200000&Category=lte.1735689599000 "HTTP/2 200 OK"
+2024-12-11 02:59:14,736 - src.analysis - INFO - [analysis.py:28] - Available columns in DataFrame: []
+2024-12-11 02:59:14,737 - src.analysis - WARNING - [analysis.py:31] - No data returned from query
+2024-12-11 02:59:14,740 - app - INFO - [app.py:350] - Successfully got analysis results
+2024-12-11 02:59:14,747 - app - INFO - [app.py:357] - Creating plot
+2024-12-11 02:59:14,748 - app - INFO - [app.py:96] - Creating plot for Análisis December 2024 - 2024-12
+2024-12-11 02:59:14,778 - app - ERROR - [app.py:381] - Error in view_analysis: 'Flow rate'
+Traceback (most recent call last):
+  File "/app/app.py", line 358, in view_analysis
+    plot_file = create_plot(
+                ^^^^^^^^^^^^
+  File "/app/app.py", line 101, in create_plot
+    flow_mask = ~np.isnan(data['Flow rate'])
+                          ~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 417, in get_loc
+    raise KeyError(key)
+KeyError: 'Flow rate'
+2024-12-11 02:59:15,055 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 02:59:15,056 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 02:59:15,236 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:59:15,237 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:00:47,468 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 03:00:47,476 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 03:00:47,652 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 03:00:47,654 - app - INFO - [app.py:333] - Using current date: month=12, year=2024
+2024-12-11 03:00:47,662 - app - INFO - [app.py:342] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 03:00:47,664 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 03:00:47,665 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1733011200000, end=1735689599000
+2024-12-11 03:00:48,716 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733011200000&Category=lte.1735689599000 "HTTP/2 200 OK"
+2024-12-11 03:00:48,783 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-11 03:00:48,828 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-11 03:00:48,829 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-11 03:00:48,830 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1733011200000, end=1735689599000
+2024-12-11 03:00:48,833 - app - INFO - [app.py:350] - Successfully got analysis results
+2024-12-11 03:00:48,842 - app - INFO - [app.py:357] - Creating plot
+2024-12-11 03:00:48,843 - app - INFO - [app.py:96] - Creating plot for Análisis December 2024 - 2024-12
+2024-12-11 03:00:48,895 - app - ERROR - [app.py:381] - Error in view_analysis: 'Flow rate'
+Traceback (most recent call last):
+  File "/app/app.py", line 358, in view_analysis
+    plot_file = create_plot(
+                ^^^^^^^^^^^^
+  File "/app/app.py", line 101, in create_plot
+    flow_mask = ~np.isnan(data['Flow rate'])
+                          ~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 417, in get_loc
+    raise KeyError(key)
+KeyError: 'Flow rate'
+2024-12-11 03:01:10,162 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=10, year=2024
+2024-12-11 03:01:10,166 - app - INFO - [app.py:342] - Calculated epochs: start=1727740800000, end=1730419199000
+2024-12-11 03:01:10,168 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 03:01:10,169 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1727740800000, end=1730419199000
+2024-12-11 03:01:11,225 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1727740800000&Category=lte.1730419199000 "HTTP/2 200 OK"
+2024-12-11 03:01:11,352 - src.analysis - INFO - [analysis.py:23] - Query response data length: 15000
+2024-12-11 03:01:11,420 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (15000, 2)
+2024-12-11 03:01:11,425 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:01:11,545 - app - ERROR - [app.py:381] - Error in view_analysis: Only valid with DatetimeIndex, TimedeltaIndex or PeriodIndex, but got an instance of 'RangeIndex'
+Traceback (most recent call last):
+  File "/app/app.py", line 345, in view_analysis
+    analysis_results = analyze_data(
+                       ^^^^^^^^^^^^^
+  File "/app/src/analysis.py", line 51, in analyze_data
+    data_resampled = data.resample('1T').mean().ffill()
+                     ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/generic.py", line 9771, in resample
+    return get_resampler(
+           ^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/resample.py", line 2050, in get_resampler
+    return tg._get_resampler(obj, kind=kind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/resample.py", line 2272, in _get_resampler
+    raise TypeError(
+TypeError: Only valid with DatetimeIndex, TimedeltaIndex or PeriodIndex, but got an instance of 'RangeIndex'
+2024-12-11 03:01:11,771 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:01:11,774 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:01:11,926 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:01:11,927 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:02:51,277 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 03:02:51,285 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 03:02:51,396 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=10, year=2024
+2024-12-11 03:02:51,397 - app - INFO - [app.py:342] - Calculated epochs: start=1727740800000, end=1730419199000
+2024-12-11 03:02:51,397 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 03:02:51,402 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1727740800000, end=1730419199000
+2024-12-11 03:02:53,245 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1727740800000&Category=lte.1730419199000 "HTTP/2 200 OK"
+2024-12-11 03:02:53,389 - src.analysis - INFO - [analysis.py:23] - Query response data length: 15000
+2024-12-11 03:02:53,480 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (15000, 2)
+2024-12-11 03:02:53,481 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:02:55,881 - app - INFO - [app.py:350] - Successfully got analysis results
+2024-12-11 03:02:55,896 - app - INFO - [app.py:357] - Creating plot
+2024-12-11 03:02:55,902 - app - INFO - [app.py:96] - Creating plot for Análisis October 2024 - 2024-10
+2024-12-11 03:02:59,476 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmprvaxpb65.png
+2024-12-11 03:02:59,486 - app - INFO - [app.py:364] - Plot created at: /static/tmprvaxpb65.png
+2024-12-11 03:02:59,958 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:02:59,967 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:03:00,237 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:03:00,240 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:03:07,274 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=7, year=2024
+2024-12-11 03:03:07,280 - app - INFO - [app.py:342] - Calculated epochs: start=1719792000000, end=1722470399000
+2024-12-11 03:03:07,281 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 03:03:07,282 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722470399000
+2024-12-11 03:03:08,272 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722470399000 "HTTP/2 200 OK"
+2024-12-11 03:03:08,408 - src.analysis - INFO - [analysis.py:23] - Query response data length: 15000
+2024-12-11 03:03:08,451 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (15000, 2)
+2024-12-11 03:03:08,452 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:03:10,400 - app - INFO - [app.py:350] - Successfully got analysis results
+2024-12-11 03:03:10,405 - app - INFO - [app.py:357] - Creating plot
+2024-12-11 03:03:10,413 - app - INFO - [app.py:96] - Creating plot for Análisis July 2024 - 2024-07
+2024-12-11 03:03:15,172 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp7orshi8s.png
+2024-12-11 03:03:15,181 - app - INFO - [app.py:364] - Plot created at: /static/tmp7orshi8s.png
+2024-12-11 03:03:15,467 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:03:15,479 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:03:15,770 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:03:15,771 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:04:37,905 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 03:04:37,913 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 03:04:38,113 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=8, year=2024
+2024-12-11 03:04:38,115 - app - ERROR - [app.py:400] - Error in view_analysis: cannot access local variable 'last_day' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app.py", line 337, in view_analysis
+    _, last_day = calendar.monthrange(year, month, last_day)
+                                                   ^^^^^^^^
+UnboundLocalError: cannot access local variable 'last_day' where it is not associated with a value
+2024-12-11 03:04:38,486 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:04:38,487 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:04:38,780 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:04:38,781 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:04:51,502 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=9, year=2024
+2024-12-11 03:04:51,506 - app - ERROR - [app.py:400] - Error in view_analysis: cannot access local variable 'last_day' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app.py", line 337, in view_analysis
+    _, last_day = calendar.monthrange(year, month, last_day)
+                                                   ^^^^^^^^
+UnboundLocalError: cannot access local variable 'last_day' where it is not associated with a value
+2024-12-11 03:04:51,644 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:04:51,658 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:04:51,973 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:04:51,973 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:02,707 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=9, year=2024
+2024-12-11 03:05:02,715 - app - ERROR - [app.py:400] - Error in view_analysis: cannot access local variable 'last_day' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app.py", line 337, in view_analysis
+    _, last_day = calendar.monthrange(year, month, last_day)
+                                                   ^^^^^^^^
+UnboundLocalError: cannot access local variable 'last_day' where it is not associated with a value
+2024-12-11 03:05:02,822 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:05:02,828 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:05:03,068 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:03,069 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:06,936 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=5, year=2024
+2024-12-11 03:05:06,940 - app - ERROR - [app.py:400] - Error in view_analysis: cannot access local variable 'last_day' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app.py", line 337, in view_analysis
+    _, last_day = calendar.monthrange(year, month, last_day)
+                                                   ^^^^^^^^
+UnboundLocalError: cannot access local variable 'last_day' where it is not associated with a value
+2024-12-11 03:05:07,087 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:05:07,094 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:05:07,271 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:07,272 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:09,579 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=5, year=2024
+2024-12-11 03:05:09,581 - app - ERROR - [app.py:400] - Error in view_analysis: cannot access local variable 'last_day' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app.py", line 337, in view_analysis
+    _, last_day = calendar.monthrange(year, month, last_day)
+                                                   ^^^^^^^^
+UnboundLocalError: cannot access local variable 'last_day' where it is not associated with a value
+2024-12-11 03:05:09,662 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:05:09,663 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:05:09,795 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:09,796 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:15,682 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=7, year=2024
+2024-12-11 03:05:15,694 - app - ERROR - [app.py:400] - Error in view_analysis: cannot access local variable 'last_day' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app.py", line 337, in view_analysis
+    _, last_day = calendar.monthrange(year, month, last_day)
+                                                   ^^^^^^^^
+UnboundLocalError: cannot access local variable 'last_day' where it is not associated with a value
+2024-12-11 03:05:15,872 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:05:15,874 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:05:16,073 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:05:16,077 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:06:33,768 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 03:06:33,778 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 03:06:33,929 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=7, year=2024
+2024-12-11 03:06:33,931 - app - INFO - [app.py:342] - Calculated epochs: start=1719792000000, end=1722470399000
+2024-12-11 03:06:33,931 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 03:06:33,933 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722470399000
+2024-12-11 03:06:35,102 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722470399000 "HTTP/2 200 OK"
+2024-12-11 03:06:35,373 - src.analysis - INFO - [analysis.py:23] - Query response data length: 15000
+2024-12-11 03:06:35,447 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (15000, 2)
+2024-12-11 03:06:35,448 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:06:37,419 - app - INFO - [app.py:369] - Successfully got analysis results
+2024-12-11 03:06:37,448 - app - INFO - [app.py:376] - Creating plot
+2024-12-11 03:06:37,451 - app - INFO - [app.py:96] - Creating plot for Análisis July 2024 - 2024-07
+2024-12-11 03:06:43,285 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpw4b6o3ai.png
+2024-12-11 03:06:43,295 - app - INFO - [app.py:383] - Plot created at: /static/tmpw4b6o3ai.png
+2024-12-11 03:06:43,659 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:06:43,676 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:06:43,944 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:06:43,946 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:06:49,449 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=5, year=2024
+2024-12-11 03:06:49,456 - app - INFO - [app.py:342] - Calculated epochs: start=1714521600000, end=1717199999000
+2024-12-11 03:06:49,459 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 03:06:49,465 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1714521600000, end=1717199999000
+2024-12-11 03:06:50,399 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1714521600000&Category=lte.1717199999000 "HTTP/2 200 OK"
+2024-12-11 03:06:50,431 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-11 03:06:50,443 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-11 03:06:50,444 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-11 03:06:50,448 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1714521600000, end=1717199999000
+2024-12-11 03:06:50,593 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 03:06:50,594 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 03:06:50,761 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:06:50,766 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 03:08:41,056 - app - INFO - [app.py:413] - Starting generate_monthly_pdf with params: month=7, year=2024, window_size=60
+2024-12-11 03:08:41,073 - app - INFO - [app.py:236] - Getting weeks for 2024-7
+2024-12-11 03:08:41,080 - app - INFO - [app.py:421] - Got 4 weeks for month 7
+2024-12-11 03:08:41,084 - app - INFO - [app.py:429] - Processing week 1: 2024-07-01 00:00:00 to 2024-07-07 00:00:00
+2024-12-11 03:08:41,086 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720310400000
+2024-12-11 03:08:42,608 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1720310400000 "HTTP/2 200 OK"
+2024-12-11 03:08:42,658 - src.analysis - INFO - [analysis.py:23] - Query response data length: 2496
+2024-12-11 03:08:42,676 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (2496, 2)
+2024-12-11 03:08:42,677 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:08:43,197 - app - INFO - [app.py:438] - Got analysis results for week 1
+2024-12-11 03:08:43,200 - app - INFO - [app.py:96] - Creating plot for Días Laborales - 2024-07-01
+2024-12-11 03:08:45,325 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpn2qak8fd.png
+2024-12-11 03:08:45,330 - app - INFO - [app.py:96] - Creating plot for Fin de Semana - 2024-07-01
+2024-12-11 03:08:47,277 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp6cyt69og.png
+2024-12-11 03:08:47,281 - app - INFO - [app.py:429] - Processing week 2: 2024-07-08 00:00:00 to 2024-07-14 00:00:00
+2024-12-11 03:08:47,281 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1720915200000
+2024-12-11 03:08:48,368 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1720396800000&Category=lte.1720915200000 "HTTP/2 200 OK"
+2024-12-11 03:08:48,409 - src.analysis - INFO - [analysis.py:23] - Query response data length: 2572
+2024-12-11 03:08:48,431 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (2572, 2)
+2024-12-11 03:08:48,432 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:08:48,927 - app - INFO - [app.py:438] - Got analysis results for week 2
+2024-12-11 03:08:48,930 - app - INFO - [app.py:96] - Creating plot for Días Laborales - 2024-07-08
+2024-12-11 03:08:50,911 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpr6tre4lt.png
+2024-12-11 03:08:50,917 - app - INFO - [app.py:96] - Creating plot for Fin de Semana - 2024-07-08
+2024-12-11 03:08:53,095 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpa1igib1v.png
+2024-12-11 03:08:53,103 - app - INFO - [app.py:429] - Processing week 3: 2024-07-15 00:00:00 to 2024-07-21 00:00:00
+2024-12-11 03:08:53,105 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721001600000, end=1721520000000
+2024-12-11 03:08:54,162 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1721001600000&Category=lte.1721520000000 "HTTP/2 200 OK"
+2024-12-11 03:08:54,238 - src.analysis - INFO - [analysis.py:23] - Query response data length: 2511
+2024-12-11 03:08:54,260 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (2511, 2)
+2024-12-11 03:08:54,261 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:08:54,754 - app - INFO - [app.py:438] - Got analysis results for week 3
+2024-12-11 03:08:54,757 - app - INFO - [app.py:96] - Creating plot for Días Laborales - 2024-07-15
+2024-12-11 03:08:57,255 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp4o_x43yr.png
+2024-12-11 03:08:57,258 - app - INFO - [app.py:96] - Creating plot for Fin de Semana - 2024-07-15
+2024-12-11 03:08:59,195 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpw69nv83q.png
+2024-12-11 03:08:59,197 - app - INFO - [app.py:429] - Processing week 4: 2024-07-22 00:00:00 to 2024-07-28 00:00:00
+2024-12-11 03:08:59,197 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721606400000, end=1722124800000
+2024-12-11 03:09:00,317 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1721606400000&Category=lte.1722124800000 "HTTP/2 200 OK"
+2024-12-11 03:09:00,357 - src.analysis - INFO - [analysis.py:23] - Query response data length: 2669
+2024-12-11 03:09:00,370 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (2669, 2)
+2024-12-11 03:09:00,372 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-11 03:09:00,830 - app - INFO - [app.py:438] - Got analysis results for week 4
+2024-12-11 03:09:00,832 - app - INFO - [app.py:96] - Creating plot for Días Laborales - 2024-07-22
+2024-12-11 03:09:02,882 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpgqqqn1oc.png
+2024-12-11 03:09:02,885 - app - INFO - [app.py:96] - Creating plot for Fin de Semana - 2024-07-22
+2024-12-11 03:09:04,788 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp96boxup2.png
+2024-12-11 03:09:04,790 - app - INFO - [app.py:137] - Creating monthly trend plot with 4 weeks of data
+2024-12-11 03:09:08,367 - app - INFO - [app.py:205] - Monthly trend plot saved to: /tmp/tmppa9nj2j5.png
+2024-12-11 03:09:10,065 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.05)` at 35:13, unknown property.
+2024-12-11 03:09:10,071 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1)` at 81:13, unknown property.
+2024-12-11 03:09:10,076 - weasyprint - WARNING - [media_queries.py:36] - Expected a media type, got '(max-width: 768px)'
+2024-12-11 03:09:10,078 - weasyprint - WARNING - [__init__.py:966] - Invalid media type ' (max-width: 768px) ' the whole @media rule was ignored at 100:9.
+2024-12-11 03:09:10,136 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 8px rgba(0,0,0,0.05)` at 14:13, unknown property.
+2024-12-11 03:09:10,142 - weasyprint - WARNING - [__init__.py:188] - Ignored `flex: 1 1 calc(33.333% - 40px)` at 15:13, invalid value.
+2024-12-11 03:09:10,156 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 8px rgba(0,0,0,0.05)` at 45:13, unknown property.
+2024-12-11 03:09:10,163 - weasyprint - WARNING - [media_queries.py:36] - Expected a media type, got '(max-width: 600px)'
+2024-12-11 03:09:10,164 - weasyprint - WARNING - [__init__.py:966] - Invalid media type ' (max-width: 600px) ' the whole @media rule was ignored at 77:9.
+2024-12-11 03:09:12,333 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'maxp' table from disk
+2024-12-11 03:09:12,337 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'maxp' table
+2024-12-11 03:09:12,339 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.006s to load 'maxp'
+2024-12-11 03:09:12,340 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'maxp'
+2024-12-11 03:09:12,341 - fontTools.subset - INFO - [__init__.py:3337] - maxp pruned
+2024-12-11 03:09:12,350 - fontTools.subset - INFO - [__init__.py:3321] - hdmx dropped
+2024-12-11 03:09:12,351 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'cmap' table from disk
+2024-12-11 03:09:12,352 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'cmap' table
+2024-12-11 03:09:12,355 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'post' table from disk
+2024-12-11 03:09:12,357 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'post' table
+2024-12-11 03:09:12,360 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'cmap' table from disk
+2024-12-11 03:09:12,362 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'cmap' table
+2024-12-11 03:09:12,408 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.057s to load 'cmap'
+2024-12-11 03:09:12,408 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'cmap'
+2024-12-11 03:09:12,409 - fontTools.subset - INFO - [__init__.py:3337] - cmap pruned
+2024-12-11 03:09:12,409 - fontTools.subset - INFO - [__init__.py:3321] - fpgm dropped
+2024-12-11 03:09:12,410 - fontTools.subset - INFO - [__init__.py:3321] - prep dropped
+2024-12-11 03:09:12,411 - fontTools.subset - INFO - [__init__.py:3321] - cvt  dropped
+2024-12-11 03:09:12,412 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to load 'post'
+2024-12-11 03:09:12,413 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'post'
+2024-12-11 03:09:12,413 - fontTools.subset - INFO - [__init__.py:3337] - post pruned
+2024-12-11 03:09:12,416 - fontTools.subset - INFO - [__init__.py:3321] - GPOS dropped
+2024-12-11 03:09:12,418 - fontTools.subset - INFO - [__init__.py:3321] - GSUB dropped
+2024-12-11 03:09:12,421 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'glyf' table from disk
+2024-12-11 03:09:12,423 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'glyf' table
+2024-12-11 03:09:12,424 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'loca' table from disk
+2024-12-11 03:09:12,425 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'loca' table
+2024-12-11 03:09:12,426 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'head' table from disk
+2024-12-11 03:09:12,427 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'head' table
+2024-12-11 03:09:12,433 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.011s to load 'glyf'
+2024-12-11 03:09:12,436 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.002s to prune 'glyf'
+2024-12-11 03:09:12,437 - fontTools.subset - INFO - [__init__.py:3337] - glyf pruned
+2024-12-11 03:09:12,439 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.001s to close glyph list over 'cmap'
+2024-12-11 03:09:12,439 - fontTools.subset - INFO - [__init__.py:3377] - Added gid0 to subset
+2024-12-11 03:09:12,441 - fontTools.subset - INFO - [__init__.py:3450] - Closing glyph list over 'glyf': 52 glyphs before
+2024-12-11 03:09:12,442 - fontTools.subset - INFO - [__init__.py:457] - Glyph names: ['.notdef', 'A', 'C', 'D', 'E', 'F', 'I', 'J', 'L', 'M', 'P', 'R', 'S', 'T', 'a', 'aacute', 'b', 'c', 'd', 'e', 'eacute', 'eight', 'f', 'five', 'four', 'g', 'hyphen', 'i', 'iacute', 'j', 'l', 'm', 'n', 'nine', 'o', 'oacute', 'one', 'p', 'percent', 'r', 's', 'seven', 'six', 'space', 't', 'three', 'two', 'u', 'uniFB01', 'v', 'y', 'zero']
+2024-12-11 03:09:12,444 - fontTools.subset - INFO - [__init__.py:460] - Glyph IDs:   [0, 4, 9, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 37, 39, 40, 41, 42, 45, 46, 48, 49, 52, 54, 55, 56, 69, 70, 71, 72, 73, 74, 75, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 93, 443, 526, 534, 538, 543]
+2024-12-11 03:09:12,447 - fontTools.subset - INFO - [__init__.py:3456] - Closed glyph list over 'glyf': 54 glyphs after
+2024-12-11 03:09:12,449 - fontTools.subset - INFO - [__init__.py:457] - Glyph names: ['.notdef', 'A', 'C', 'D', 'E', 'F', 'I', 'J', 'L', 'M', 'P', 'R', 'S', 'T', 'a', 'aacute', 'acute', 'b', 'c', 'd', 'dotlessi', 'e', 'eacute', 'eight', 'f', 'five', 'four', 'g', 'hyphen', 'i', 'iacute', 'j', 'l', 'm', 'n', 'nine', 'o', 'oacute', 'one', 'p', 'percent', 'r', 's', 'seven', 'six', 'space', 't', 'three', 'two', 'u', 'uniFB01', 'v', 'y', 'zero']
+2024-12-11 03:09:12,450 - fontTools.subset - INFO - [__init__.py:460] - Glyph IDs:   [0, 4, 9, 17, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 37, 39, 40, 41, 42, 45, 46, 48, 49, 52, 54, 55, 56, 69, 70, 71, 72, 73, 74, 75, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 93, 117, 141, 443, 526, 534, 538, 543]
+2024-12-11 03:09:12,451 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.010s to close glyph list over 'glyf'
+2024-12-11 03:09:12,453 - fontTools.subset - INFO - [__init__.py:3509] - Retaining 54 glyphs
+2024-12-11 03:09:12,457 - fontTools.subset - INFO - [__init__.py:3519] - head subsetting not needed
+2024-12-11 03:09:12,458 - fontTools.subset - INFO - [__init__.py:3519] - hhea subsetting not needed
+2024-12-11 03:09:12,459 - fontTools.subset - INFO - [__init__.py:3519] - maxp subsetting not needed
+2024-12-11 03:09:12,460 - fontTools.subset - INFO - [__init__.py:3519] - OS/2 subsetting not needed
+2024-12-11 03:09:12,463 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'hmtx' table from disk
+2024-12-11 03:09:12,464 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'hmtx' table
+2024-12-11 03:09:12,464 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'hhea' table from disk
+2024-12-11 03:09:12,465 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'hhea' table
+2024-12-11 03:09:12,469 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.006s to subset 'hmtx'
+2024-12-11 03:09:12,470 - fontTools.subset - INFO - [__init__.py:3530] - hmtx subsetted
+2024-12-11 03:09:12,474 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.001s to subset 'cmap'
+2024-12-11 03:09:12,475 - fontTools.subset - INFO - [__init__.py:3530] - cmap subsetted
+2024-12-11 03:09:12,477 - fontTools.subset - INFO - [__init__.py:3519] - loca subsetting not needed
+2024-12-11 03:09:12,479 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to subset 'post'
+2024-12-11 03:09:12,480 - fontTools.subset - INFO - [__init__.py:3530] - post subsetted
+2024-12-11 03:09:12,481 - fontTools.subset - INFO - [__init__.py:3519] - gasp subsetting not needed
+2024-12-11 03:09:12,484 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'GDEF' table from disk
+2024-12-11 03:09:12,485 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'GDEF' table
+2024-12-11 03:09:12,491 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.007s to subset 'GDEF'
+2024-12-11 03:09:12,492 - fontTools.subset - INFO - [__init__.py:3530] - GDEF subsetted
+2024-12-11 03:09:12,493 - fontTools.subset - INFO - [__init__.py:3519] - name subsetting not needed
+2024-12-11 03:09:12,495 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.002s to subset 'glyf'
+2024-12-11 03:09:12,497 - fontTools.subset - INFO - [__init__.py:3530] - glyf subsetted
+2024-12-11 03:09:12,499 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to subset GlyphOrder
+2024-12-11 03:09:12,504 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'head'
+2024-12-11 03:09:12,507 - fontTools.subset - INFO - [__init__.py:3589] - head pruned
+2024-12-11 03:09:12,516 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'OS/2' table from disk
+2024-12-11 03:09:12,521 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'OS/2' table
+2024-12-11 03:09:12,528 - fontTools.subset - INFO - [__init__.py:3556] - OS/2 Unicode ranges pruned: [0, 1, 62]
+2024-12-11 03:09:12,530 - fontTools.subset - INFO - [__init__.py:3565] - OS/2 CodePage ranges pruned: [0]
+2024-12-11 03:09:12,536 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.002s to prune 'glyf'
+2024-12-11 03:09:12,540 - fontTools.subset - INFO - [__init__.py:3589] - glyf pruned
+2024-12-11 03:09:12,542 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'GDEF'
+2024-12-11 03:09:12,545 - fontTools.subset - INFO - [__init__.py:3589] - GDEF pruned
+2024-12-11 03:09:12,553 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'name' table from disk
+2024-12-11 03:09:12,556 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'name' table
+2024-12-11 03:09:12,559 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'gasp' table from disk
+2024-12-11 03:09:12,561 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'gasp' table
+2024-12-11 03:09:12,562 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.009s to prune 'name'
+2024-12-11 03:09:12,562 - fontTools.subset - INFO - [__init__.py:3589] - name pruned
+2024-12-11 03:09:12,565 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'glyf' table
+2024-12-11 03:09:12,607 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'glyf' table to disk
+2024-12-11 03:09:12,609 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'maxp' table
+2024-12-11 03:09:12,610 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'maxp' table to disk
+2024-12-11 03:09:12,611 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'loca' table
+2024-12-11 03:09:12,613 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'loca' table to disk
+2024-12-11 03:09:12,613 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'head' table
+2024-12-11 03:09:12,619 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'head' table to disk
+2024-12-11 03:09:12,621 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'hmtx' table
+2024-12-11 03:09:12,627 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'hmtx' table to disk
+2024-12-11 03:09:12,633 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'hhea' table
+2024-12-11 03:09:12,637 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'hhea' table to disk
+2024-12-11 03:09:12,640 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'OS/2' table
+2024-12-11 03:09:12,642 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'OS/2' table to disk
+2024-12-11 03:09:12,645 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'cmap' table
+2024-12-11 03:09:12,651 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'cmap' table to disk
+2024-12-11 03:09:12,652 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'name' table
+2024-12-11 03:09:12,653 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'name' table to disk
+2024-12-11 03:09:12,654 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'post' table
+2024-12-11 03:09:12,656 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'post' table to disk
+2024-12-11 03:09:12,658 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'gasp' table
+2024-12-11 03:09:12,663 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'gasp' table to disk
+2024-12-11 03:09:12,665 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'GDEF' table
+2024-12-11 03:09:12,668 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'GDEF' table to disk
+2024-12-11 03:09:12,688 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'maxp' table from disk
+2024-12-11 03:09:12,691 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'maxp' table
+2024-12-11 03:09:12,699 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.008s to load 'maxp'
+2024-12-11 03:09:12,701 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'maxp'
+2024-12-11 03:09:12,705 - fontTools.subset - INFO - [__init__.py:3337] - maxp pruned
+2024-12-11 03:09:12,716 - fontTools.subset - INFO - [__init__.py:3321] - hdmx dropped
+2024-12-11 03:09:12,718 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'cmap' table from disk
+2024-12-11 03:09:12,721 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'cmap' table
+2024-12-11 03:09:12,726 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'post' table from disk
+2024-12-11 03:09:12,726 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'post' table
+2024-12-11 03:09:12,729 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'cmap' table from disk
+2024-12-11 03:09:12,731 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'cmap' table
+2024-12-11 03:09:12,743 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.025s to load 'cmap'
+2024-12-11 03:09:12,743 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'cmap'
+2024-12-11 03:09:12,745 - fontTools.subset - INFO - [__init__.py:3337] - cmap pruned
+2024-12-11 03:09:12,746 - fontTools.subset - INFO - [__init__.py:3321] - fpgm dropped
+2024-12-11 03:09:12,746 - fontTools.subset - INFO - [__init__.py:3321] - prep dropped
+2024-12-11 03:09:12,747 - fontTools.subset - INFO - [__init__.py:3321] - cvt  dropped
+2024-12-11 03:09:12,749 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to load 'post'
+2024-12-11 03:09:12,749 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'post'
+2024-12-11 03:09:12,750 - fontTools.subset - INFO - [__init__.py:3337] - post pruned
+2024-12-11 03:09:12,750 - fontTools.subset - INFO - [__init__.py:3321] - GPOS dropped
+2024-12-11 03:09:12,752 - fontTools.subset - INFO - [__init__.py:3321] - GSUB dropped
+2024-12-11 03:09:12,757 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'glyf' table from disk
+2024-12-11 03:09:12,759 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'glyf' table
+2024-12-11 03:09:12,759 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'loca' table from disk
+2024-12-11 03:09:12,763 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'loca' table
+2024-12-11 03:09:12,763 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'head' table from disk
+2024-12-11 03:09:12,765 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'head' table
+2024-12-11 03:09:12,771 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.014s to load 'glyf'
+2024-12-11 03:09:12,773 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.001s to prune 'glyf'
+2024-12-11 03:09:12,775 - fontTools.subset - INFO - [__init__.py:3337] - glyf pruned
+2024-12-11 03:09:12,777 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to close glyph list over 'cmap'
+2024-12-11 03:09:12,778 - fontTools.subset - INFO - [__init__.py:3377] - Added gid0 to subset
+2024-12-11 03:09:12,780 - fontTools.subset - INFO - [__init__.py:3450] - Closing glyph list over 'glyf': 55 glyphs before
+2024-12-11 03:09:12,782 - fontTools.subset - INFO - [__init__.py:457] - Glyph names: ['.notdef', 'C', 'D', 'E', 'F', 'I', 'L', 'P', 'S', 'T', 'U', 'Y', 'a', 'aacute', 'b', 'c', 'colon', 'comma', 'd', 'e', 'eacute', 'eight', 'f', 'five', 'four', 'g', 'h', 'hyphen', 'i', 'l', 'm', 'n', 'nine', 'o', 'oacute', 'one', 'p', 'parenleft', 'parenright', 'percent', 'period', 'r', 's', 'seven', 'six', 'slash', 'space', 't', 'three', 'two', 'u', 'uniFB01', 'v', 'y', 'zero']
+2024-12-11 03:09:12,784 - fontTools.subset - INFO - [__init__.py:460] - Glyph IDs:   [0, 4, 9, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 39, 40, 41, 42, 45, 48, 52, 55, 56, 57, 61, 69, 70, 71, 72, 73, 74, 75, 76, 77, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 93, 443, 526, 534, 543]
+2024-12-11 03:09:12,785 - fontTools.subset - INFO - [__init__.py:3456] - Closed glyph list over 'glyf': 56 glyphs after
+2024-12-11 03:09:12,787 - fontTools.subset - INFO - [__init__.py:457] - Glyph names: ['.notdef', 'C', 'D', 'E', 'F', 'I', 'L', 'P', 'S', 'T', 'U', 'Y', 'a', 'aacute', 'acute', 'b', 'c', 'colon', 'comma', 'd', 'e', 'eacute', 'eight', 'f', 'five', 'four', 'g', 'h', 'hyphen', 'i', 'l', 'm', 'n', 'nine', 'o', 'oacute', 'one', 'p', 'parenleft', 'parenright', 'percent', 'period', 'r', 's', 'seven', 'six', 'slash', 'space', 't', 'three', 'two', 'u', 'uniFB01', 'v', 'y', 'zero']
+2024-12-11 03:09:12,789 - fontTools.subset - INFO - [__init__.py:460] - Glyph IDs:   [0, 4, 9, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 39, 40, 41, 42, 45, 48, 52, 55, 56, 57, 61, 69, 70, 71, 72, 73, 74, 75, 76, 77, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 93, 117, 443, 526, 534, 543]
+2024-12-11 03:09:12,791 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.010s to close glyph list over 'glyf'
+2024-12-11 03:09:12,795 - fontTools.subset - INFO - [__init__.py:3509] - Retaining 56 glyphs
+2024-12-11 03:09:12,799 - fontTools.subset - INFO - [__init__.py:3519] - head subsetting not needed
+2024-12-11 03:09:12,800 - fontTools.subset - INFO - [__init__.py:3519] - hhea subsetting not needed
+2024-12-11 03:09:12,803 - fontTools.subset - INFO - [__init__.py:3519] - maxp subsetting not needed
+2024-12-11 03:09:12,804 - fontTools.subset - INFO - [__init__.py:3519] - OS/2 subsetting not needed
+2024-12-11 03:09:12,805 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'hmtx' table from disk
+2024-12-11 03:09:12,806 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'hmtx' table
+2024-12-11 03:09:12,808 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'hhea' table from disk
+2024-12-11 03:09:12,808 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'hhea' table
+2024-12-11 03:09:12,812 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.007s to subset 'hmtx'
+2024-12-11 03:09:12,814 - fontTools.subset - INFO - [__init__.py:3530] - hmtx subsetted
+2024-12-11 03:09:12,816 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.001s to subset 'cmap'
+2024-12-11 03:09:12,817 - fontTools.subset - INFO - [__init__.py:3530] - cmap subsetted
+2024-12-11 03:09:12,819 - fontTools.subset - INFO - [__init__.py:3519] - loca subsetting not needed
+2024-12-11 03:09:12,821 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to subset 'post'
+2024-12-11 03:09:12,823 - fontTools.subset - INFO - [__init__.py:3530] - post subsetted
+2024-12-11 03:09:12,824 - fontTools.subset - INFO - [__init__.py:3519] - gasp subsetting not needed
+2024-12-11 03:09:12,825 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'GDEF' table from disk
+2024-12-11 03:09:12,826 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'GDEF' table
+2024-12-11 03:09:12,832 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.006s to subset 'GDEF'
+2024-12-11 03:09:12,835 - fontTools.subset - INFO - [__init__.py:3530] - GDEF subsetted
+2024-12-11 03:09:12,840 - fontTools.subset - INFO - [__init__.py:3519] - name subsetting not needed
+2024-12-11 03:09:12,847 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.001s to subset 'glyf'
+2024-12-11 03:09:12,849 - fontTools.subset - INFO - [__init__.py:3530] - glyf subsetted
+2024-12-11 03:09:12,851 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to subset GlyphOrder
+2024-12-11 03:09:12,853 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'head'
+2024-12-11 03:09:12,856 - fontTools.subset - INFO - [__init__.py:3589] - head pruned
+2024-12-11 03:09:12,859 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'OS/2' table from disk
+2024-12-11 03:09:12,859 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'OS/2' table
+2024-12-11 03:09:12,862 - fontTools.subset - INFO - [__init__.py:3556] - OS/2 Unicode ranges pruned: [0, 1, 62]
+2024-12-11 03:09:12,865 - fontTools.subset - INFO - [__init__.py:3565] - OS/2 CodePage ranges pruned: [0]
+2024-12-11 03:09:12,871 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.003s to prune 'glyf'
+2024-12-11 03:09:12,872 - fontTools.subset - INFO - [__init__.py:3589] - glyf pruned
+2024-12-11 03:09:12,875 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.000s to prune 'GDEF'
+2024-12-11 03:09:12,876 - fontTools.subset - INFO - [__init__.py:3589] - GDEF pruned
+2024-12-11 03:09:12,878 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'name' table from disk
+2024-12-11 03:09:12,881 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'name' table
+2024-12-11 03:09:12,889 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:467] - Reading 'gasp' table from disk
+2024-12-11 03:09:12,892 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:476] - Decompiling 'gasp' table
+2024-12-11 03:09:12,895 - fontTools.subset.timer - DEBUG - [loggingTools.py:357] - Took 0.015s to prune 'name'
+2024-12-11 03:09:12,896 - fontTools.subset - INFO - [__init__.py:3589] - name pruned
+2024-12-11 03:09:12,900 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'glyf' table
+2024-12-11 03:09:12,954 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'glyf' table to disk
+2024-12-11 03:09:12,960 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'maxp' table
+2024-12-11 03:09:12,962 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'maxp' table to disk
+2024-12-11 03:09:12,963 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'loca' table
+2024-12-11 03:09:12,967 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'loca' table to disk
+2024-12-11 03:09:12,970 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'head' table
+2024-12-11 03:09:12,972 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'head' table to disk
+2024-12-11 03:09:12,976 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'hmtx' table
+2024-12-11 03:09:12,980 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'hmtx' table to disk
+2024-12-11 03:09:12,982 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'hhea' table
+2024-12-11 03:09:12,984 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'hhea' table to disk
+2024-12-11 03:09:12,985 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'OS/2' table
+2024-12-11 03:09:12,988 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'OS/2' table to disk
+2024-12-11 03:09:12,992 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'cmap' table
+2024-12-11 03:09:12,995 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'cmap' table to disk
+2024-12-11 03:09:12,998 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'name' table
+2024-12-11 03:09:13,000 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'name' table to disk
+2024-12-11 03:09:13,003 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'post' table
+2024-12-11 03:09:13,005 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'post' table to disk
+2024-12-11 03:09:13,008 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'gasp' table
+2024-12-11 03:09:13,009 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'gasp' table to disk
+2024-12-11 03:09:13,011 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:740] - Compiling 'GDEF' table
+2024-12-11 03:09:13,014 - fontTools.ttLib.ttFont - DEBUG - [ttFont.py:726] - Writing 'GDEF' table to disk
+2024-12-11 03:09:23,007 - app - INFO - [app.py:507] - PDF report rendered successfully: /tmp/tmpk5fnci0b.pdf

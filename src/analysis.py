@@ -1,29 +1,54 @@
 import pandas as pd
 from supabase import create_client
 import os
+import logging
 
-def analyze_data( window_size=60, start_epoch=None, end_epoch=None):
+logger = logging.getLogger(__name__)
+
+def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int = None):
+    logger.info(f"Analyzing data with window_size={window_size}, start={start_epoch}, end={end_epoch}")
+    
     # Initialize Supabase client
-    supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_key = os.environ.get("SUPABASE_KEY")
-    supabase = create_client(supabase_url, supabase_key)
-
-    # Build query with filters if start/end epochs provided
+    supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
+    
+    # Build the query
     query = supabase.table("refugioAleman").select("*")
     if start_epoch is not None:
         query = query.gte("Category", start_epoch)
     if end_epoch is not None:
         query = query.lte("Category", end_epoch)
     
+    # Execute query and log the response
     response = query.execute()
+    logger.info(f"Query response data length: {len(response.data) if response.data else 0}")
+    
+    # Convert to DataFrame
     data = pd.DataFrame(response.data)
     
-    # Convert the 'Category' column from epoch to datetime
+    # Add debugging information
+    logger.info(f"DataFrame shape: {data.shape}")
+    logger.info(f"Available columns in DataFrame: {data.columns.tolist()}")
+    
+    if data.empty:
+        logger.warning(f"No data found for period: start={start_epoch}, end={end_epoch}")
+        return {
+            'weekday_data': pd.DataFrame(),
+            'weekend_data': pd.DataFrame(),
+            'weekday_wasted': 0,
+            'weekend_wasted': 0,
+            'weekday_total': 0,
+            'weekend_total': 0,
+            'weekday_efficiency': 0,
+            'weekend_efficiency': 0,
+            'weekday_peak': {'day': None, 'consumption': 0},
+            'weekend_peak': {'day': None, 'consumption': 0}
+        }
+    
+    # Convert Category to Timestamp and set as index
     data['Timestamp'] = pd.to_datetime(data['Category'], unit='ms')
-    data.drop(columns=['Category'], inplace=True)
-    data.set_index('Timestamp', inplace=True)
-
-    # Resample the data to 1-minute intervals
+    data = data.set_index('Timestamp')  # Set Timestamp as the index
+    
+    # Now we can resample the data
     data_resampled = data.resample('1T').mean().ffill()
     
     # Separate weekday and weekend data

@@ -318,7 +318,7 @@ def analysis():
 @app.get("/view_analysis", response_class=HTMLResponse)
 async def view_analysis(
     request: Request, 
-    table_name: str = "refugioAleman",  # Default value set here
+    table_name: str = "refugioAleman",
     window_size: int = 60, 
     month: int = None, 
     year: int = None
@@ -347,6 +347,25 @@ async def view_analysis(
             start_epoch=start_epoch,
             end_epoch=end_epoch
         )
+        
+        if (analysis_results['weekday_total'] == 0 and 
+            analysis_results['weekend_total'] == 0):
+            # No data found for the selected period
+            return templates.TemplateResponse("analysis.html", {
+                "request": request,
+                "error_message": f"No se encontraron datos para el período seleccionado: {calendar.month_name[month]} {year}",
+                "plot_url": None,
+                "window_size": window_size,
+                "month": month,
+                "year": year,
+                "total_water_wasted_weekdays": 0,
+                "efficiency_percentage_weekdays": 0,
+                "total_water_consumed_weekdays": 0,
+                "total_water_wasted_weekends": 0,
+                "efficiency_percentage_weekends": 0,
+                "total_water_consumed_weekends": 0
+            })
+        
         logger.info("Successfully got analysis results")
                                       
         combined_data = pd.concat([
