@@ -15,16 +15,33 @@ import os
 import pandas as pd
 import tempfile
 from supabase import create_client
+import logging
+import sys
 
 from src.analysis import analyze_data
 from src.scrape import fetch_page_info
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
+logger.info("Starting application initialization")
+
 # Initialize FastAPI app and templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory=tempfile.gettempdir()), name="static")
+logger.info("FastAPI app and templates initialized")
 
 # Constants
 WEEK_COLORS = {
@@ -34,18 +51,23 @@ WEEK_COLORS = {
     'Semana 4': '#e67e22',
     'Semana 5': '#9b59b6'
 }
+logger.debug(f"Week colors configured: {WEEK_COLORS}")
 
 # Helper Functions
 def adjust_color_brightness(hex_color, factor):
     """Adjust the brightness of a hex color"""
+    logger.debug(f"Adjusting color brightness for {hex_color} with factor {factor}")
     hex_color = hex_color.lstrip('#')
     rgb = tuple(int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4))
     hsv = colorsys.rgb_to_hsv(*rgb)
     hsv = (hsv[0], hsv[1], min(1, hsv[2] * factor))
     rgb = colorsys.hsv_to_rgb(*hsv)
-    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+    adjusted_color = '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+    logger.debug(f"Adjusted color: {adjusted_color}")
+    return adjusted_color
 
 def split_at_gaps(index, values, mask):
+    logger.debug(f"Splitting data at gaps with {len(index)} points")
     time_diffs = np.diff(index[mask])
     gaps = np.where(time_diffs > pd.Timedelta(minutes=1))[0]
     segments = []
@@ -67,9 +89,11 @@ def split_at_gaps(index, values, mask):
     if np.sum(segment_mask) > 1:
         segments.append((index[segment_mask], values[segment_mask]))
     
+    logger.debug(f"Created {len(segments)} segments")
     return segments
 
 def create_plot(data, title_prefix, date_str):
+    logger.info(f"Creating plot for {title_prefix} - {date_str}")
     plt.figure(figsize=(12, 6))
     plt.style.use('default')
     
@@ -77,6 +101,9 @@ def create_plot(data, title_prefix, date_str):
     flow_mask = ~np.isnan(data['Flow rate'])
     min_mask = ~np.isnan(data['RollingMin'])
     min_mask = ~np.isnan(data['RollingMin'])
+    
+    logger.debug(f"Valid flow data points: {np.sum(flow_mask)}")
+    logger.debug(f"Valid min data points: {np.sum(min_mask)}")
     
     # Plot flow rate segments
     flow_segments = split_at_gaps(data.index, data['Flow rate'], flow_mask)
@@ -103,9 +130,11 @@ def create_plot(data, title_prefix, date_str):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
         plt.savefig(temp_file.name, dpi=300, bbox_inches='tight')
         plt.close()
+        logger.info(f"Plot saved to temporary file: {temp_file.name}")
     return temp_file.name
 
 def create_monthly_trend_plot(weeks_data):
+    logger.info(f"Creating monthly trend plot with {len(weeks_data)} weeks of data")
     # Extract data
     weeks = [f"Semana {i + 1}" for i in range(len(weeks_data))]
     weekday_consumptions = [week['weekday_consumption'] for week in weeks_data]
@@ -115,6 +144,11 @@ def create_monthly_trend_plot(weeks_data):
     weekday_losses = [week['weekday_wasted'] for week in weeks_data]
     weekend_losses = [week['weekend_wasted'] for week in weeks_data]
     colors = [week['color'] for week in weeks_data]
+
+    logger.debug(f"Weekday consumptions: {weekday_consumptions}")
+    logger.debug(f"Weekend consumptions: {weekend_consumptions}")
+    logger.debug(f"Weekday efficiencies: {weekday_efficiencies}")
+    logger.debug(f"Weekend efficiencies: {weekend_efficiencies}")
 
     # Create figure with larger size
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
@@ -168,14 +202,17 @@ def create_monthly_trend_plot(weeks_data):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
         plt.savefig(temp_file.name, bbox_inches='tight', dpi=300)
         plt.close()
+        logger.info(f"Monthly trend plot saved to: {temp_file.name}")
     return temp_file.name
 
 def generate_pdf_report(weekly_data):
+    logger.info("Generating PDF report")
     env = Environment(loader=FileSystemLoader('templates'))
     template_week = env.get_template('pdf_week.html')
     
     rendered_html = ""
     for week in weekly_data:
+        logger.debug(f"Rendering template for week: {week['dates']}")
         rendered_html += template_week.render(
             weekday_dates=week['dates'],
             weekend_dates=week['dates'],
@@ -192,9 +229,11 @@ def generate_pdf_report(weekly_data):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
         pdf_file = temp_file.name
         HTML(string=rendered_html).write_pdf(pdf_file)
+        logger.info(f"PDF report generated at: {pdf_file}")
     return pdf_file
 
 def get_weeks_of_month(year: int, month: int) -> List[tuple]:
+    logger.info(f"Getting weeks for {year}-{month}")
     first_day = datetime(year, month, 1)
     _, num_days = calendar.monthrange(year, month)
     last_day = datetime(year, month, num_days)
@@ -211,12 +250,19 @@ def get_weeks_of_month(year: int, month: int) -> List[tuple]:
             week_ranges.append((week_start, week_end))
         current_day += timedelta(days=7)
     
+    logger.debug(f"Found {len(week_ranges)} complete weeks")
     return week_ranges
 
 # Function to get table names from Supabase
 def get_table_names():
+    logger.info("Fetching table names from Supabase")
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        logger.error("Missing Supabase credentials")
+        raise ValueError("Missing Supabase credentials")
+        
     supabase = create_client(supabase_url, supabase_key)
     
     # Directly query the information schema for table names
@@ -226,30 +272,42 @@ def get_table_names():
     WHERE schemaname = 'public';
     """
     
-    response = supabase.sql(query).execute()
-    if response.error:
-        raise Exception(response.error.message)
-    
-    # Extract table names
-    table_names = [table['tablename'] for table in response.data]
-    return table_names
+    try:
+        response = supabase.sql(query).execute()
+        if response.error:
+            logger.error(f"Supabase query error: {response.error.message}")
+            raise Exception(response.error.message)
+        
+        # Extract table names
+        table_names = [table['tablename'] for table in response.data]
+        logger.info(f"Found {len(table_names)} tables")
+        logger.debug(f"Table names: {table_names}")
+        return table_names
+    except Exception as e:
+        logger.error(f"Error fetching table names: {str(e)}")
+        raise
 
 @app.get("/tables", response_class=JSONResponse)
 async def fetch_tables():
+    logger.info("Handling /tables request")
     try:
         table_names = get_table_names()
         return {"tables": table_names}
     except Exception as e:
+        logger.error(f"Error in /tables endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # API Endpoints
 @app.get("/ping", status_code=200)
 def ping():
+    logger.debug("Ping request received")
     return {"status": "success", "message": "Pong"}
 
 @app.get("/analysis", status_code=200)
 def analysis():
+    logger.info("Starting analysis endpoint")
     total_water_wasted, data_resampled, total_water_consumed, efficiency_percentage = analyze_data()
+    logger.info(f"Analysis completed - Efficiency: {efficiency_percentage}%")
     return {
         "status": "success", 
         "total_water_wasted": total_water_wasted,
@@ -265,12 +323,14 @@ async def view_analysis(
     month: int = None, 
     year: int = None
 ):
+    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, month={month}, year={year}")
     try:
         # If month/year not provided, use current date
         if month is None or year is None:
             now = datetime.now()
             month = now.month
             year = now.year
+            logger.info(f"Using current date: month={month}, year={year}")
             
         # Calculate epoch timestamps for start/end of month
         start_date = datetime(year, month, 1)
@@ -279,25 +339,29 @@ async def view_analysis(
         
         start_epoch = int(datetime.timestamp(start_date) * 1000)
         end_epoch = int(datetime.timestamp(end_date) * 1000)
+        logger.info(f"Calculated epochs: start={start_epoch}, end={end_epoch}")
 
+        logger.info("Calling analyze_data function")
         analysis_results = analyze_data(
-            table_name=table_name,
             window_size=window_size, 
             start_epoch=start_epoch,
             end_epoch=end_epoch
         )
+        logger.info("Successfully got analysis results")
                                       
         combined_data = pd.concat([
             analysis_results['weekday_data'],
             analysis_results['weekend_data']
         ])
         
+        logger.info("Creating plot")
         plot_file = create_plot(
             combined_data,
             f'Análisis {calendar.month_name[month]} {year}',
             f'{year}-{month:02d}'
         )
         plot_url = f"/static/{os.path.basename(plot_file)}"
+        logger.info(f"Plot created at: {plot_url}")
         
         return templates.TemplateResponse("analysis.html", {
             "request": request,
@@ -314,6 +378,7 @@ async def view_analysis(
             "error_message": None  # No error
         })
     except Exception as e:
+        logger.error(f"Error in view_analysis: {str(e)}", exc_info=True)
         # Pass the error message to the template
         return templates.TemplateResponse("analysis.html", {
             "request": request,
@@ -326,6 +391,7 @@ async def view_analysis(
 
 @app.get("/generate_monthly_pdf", status_code=200)
 async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
+    logger.info(f"Starting generate_monthly_pdf with params: month={month}, year={year}, window_size={window_size}")
     try:
         report = Report(
             title=f"Informe Mensual de Consumo de Agua - {calendar.month_name[month]} {year}",
@@ -333,12 +399,15 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
         )
         
         week_ranges = get_weeks_of_month(year, month)
+        logger.info(f"Got {len(week_ranges)} weeks for month {month}")
+        
         weeks_data = []
         max_consumption = 0
         max_wasted = 0
         week_number = 1
         
         for start_date, end_date in week_ranges:
+            logger.info(f"Processing week {week_number}: {start_date} to {end_date}")
             start_epoch = int(datetime.timestamp(start_date) * 1000)
             end_epoch = int(datetime.timestamp(end_date) * 1000)
             
@@ -347,6 +416,7 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
                 start_epoch=start_epoch,
                 end_epoch=end_epoch
             )
+            logger.info(f"Got analysis results for week {week_number}")
             
             # Create sections
             weekday_section = WeekdaySection(f"Semana {week_number} - Días Laborales")
@@ -415,10 +485,16 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
         report.add_section(comparison_section)
         
         pdf_file = report.render()
+        logger.info(f"PDF report rendered successfully: {pdf_file}")
         
+        # Cleanup temporary plot files
         for section in report.sections:
             if os.path.exists(section.data.get('plot', '')):
-                os.remove(section.data['plot'])
+                try:
+                    os.remove(section.data['plot'])
+                    logger.debug(f"Removed temporary plot file: {section.data['plot']}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove temporary plot file: {e}")
         
         return FileResponse(
             pdf_file,
@@ -426,10 +502,12 @@ async def generate_monthly_pdf(month: int, year: int, window_size: int = 60):
             filename=f'water_analysis_{year}_{month}.pdf'
         )
     except Exception as e:
+        logger.error(f"Error generating monthly PDF: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test_comparison_plot")
 async def test_comparison_plot():
+    logger.info("Starting test comparison plot generation")
     test_weeks_data = [
         {
             'title': 'Semana 1',
@@ -463,7 +541,9 @@ async def test_comparison_plot():
         }
     ]
     
+    logger.debug("Creating test comparison plot with sample data")
     plot_file = create_monthly_trend_plot(test_weeks_data)
+    logger.info(f"Test comparison plot created: {plot_file}")
     
     return FileResponse(
         plot_file,

@@ -1,0 +1,53 @@
+2024-12-11 02:42:09,656 - app - INFO - Starting generate_monthly_pdf with params: month=12, year=2024, window_size=60
+2024-12-11 02:42:09,666 - app - INFO - Got 4 weeks for month 12
+2024-12-11 02:42:09,670 - app - INFO - Processing week 1: 2024-12-02 00:00:00 to 2024-12-08 00:00:00
+2024-12-11 02:42:11,223 - httpx - INFO - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733097600000&Category=lte.1733616000000 "HTTP/2 200 OK"
+2024-12-11 02:43:32,221 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:43:32,234 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:44:08,776 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:44:08,789 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:44:46,616 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:44:46,663 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:45:19,552 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:45:19,648 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:45:43,037 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:45:43,048 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:45:43,292 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 02:45:43,298 - app - INFO - [app.py:333] - Using current date: month=12, year=2024
+2024-12-11 02:45:43,302 - app - INFO - [app.py:342] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 02:45:43,305 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 02:45:43,326 - app - ERROR - [app.py:382] - Error in view_analysis: analyze_data() got an unexpected keyword argument 'table_name'
+Traceback (most recent call last):
+  File "/app/app.py", line 345, in view_analysis
+    analysis_results = analyze_data(
+                       ^^^^^^^^^^^^^
+TypeError: analyze_data() got an unexpected keyword argument 'table_name'
+2024-12-11 02:45:43,759 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 02:45:43,762 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 02:45:44,009 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:45:44,011 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:47:54,438 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-11 02:47:54,446 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-11 02:47:54,570 - app - INFO - [app.py:326] - Starting view_analysis with params: table=refugioAleman, window=60, month=None, year=None
+2024-12-11 02:47:54,575 - app - INFO - [app.py:333] - Using current date: month=12, year=2024
+2024-12-11 02:47:54,578 - app - INFO - [app.py:342] - Calculated epochs: start=1733011200000, end=1735689599000
+2024-12-11 02:47:54,579 - app - INFO - [app.py:344] - Calling analyze_data function
+2024-12-11 02:47:55,939 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733011200000&Category=lte.1735689599000 "HTTP/2 200 OK"
+2024-12-11 02:47:56,006 - app - ERROR - [app.py:381] - Error in view_analysis: 'Category'
+Traceback (most recent call last):
+  File "/app/app.py", line 345, in view_analysis
+    analysis_results = analyze_data(
+                       ^^^^^^^^^^^^^
+  File "/app/src/analysis.py", line 22, in analyze_data
+    data['Timestamp'] = pd.to_datetime(data['Category'], unit='ms')
+                                       ~~~~^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 417, in get_loc
+    raise KeyError(key)
+KeyError: 'Category'
+2024-12-11 02:47:56,312 - app - INFO - [app.py:292] - Handling /tables request
+2024-12-11 02:47:56,313 - app - INFO - [app.py:258] - Fetching table names from Supabase
+2024-12-11 02:47:56,452 - app - ERROR - [app.py:287] - Error fetching table names: 'SyncClient' object has no attribute 'sql'
+2024-12-11 02:47:56,453 - app - ERROR - [app.py:297] - Error in /tables endpoint: 'SyncClient' object has no attribute 'sql'
