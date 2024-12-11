@@ -211,6 +211,10 @@ def generate_pdf_report(weekly_data):
     template_week = env.get_template('pdf_week.html')
     
     rendered_html = ""
+    
+    # Create the weekly trend plot first
+    weekly_trend_plot = create_weekly_trend_plot(weekly_data)
+    
     for week in weekly_data:
         logger.debug(f"Rendering template for week: {week['dates']}")
         rendered_html += template_week.render(
@@ -223,7 +227,8 @@ def generate_pdf_report(weekly_data):
             weekday_total_consumption=week['weekday_total'],
             weekend_total_consumption=week['weekend_total'],
             weekday_plot=week['weekday_plot'],
-            weekend_plot=week['weekend_plot']
+            weekend_plot=week['weekend_plot'],
+            weekly_trend_plot=weekly_trend_plot  # Add the trend plot to the template context
         )
     
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
