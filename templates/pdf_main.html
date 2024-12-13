@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,10 +10,23 @@
             size: A4;
             margin: 0mm;
             padding: 0mm;
-            @top-left { content: ''; }
-            @top-right { content: ''; }
-            @bottom-left { content: ''; }
-            @bottom-right { content: ''; }
+
+            @top-left {
+                content: '';
+            }
+
+            @top-right {
+                content: '';
+            }
+
+            @bottom-left {
+                content: '';
+            }
+
+            @bottom-right {
+                content: '';
+            }
+
             background: url('data:image/jpeg;base64,{{ background_image_base64 }}') no-repeat center center;
             background-size: cover;
         }
@@ -116,22 +130,26 @@
             text-align: center;
             margin-top: 30px;
         }
+
         .chart-placeholder h4 {
             font-size: 1.6rem;
             color: #333;
             margin-bottom: 25px;
         }
+
         .chart-placeholder img {
             max-width: 100%;
             height: auto;
             border-radius: 8px;
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
         }
+
         .observations {
             font-size: 1.125rem;
             line-height: 1.6;
             margin-top: 30px;
         }
+
         .observations h2 {
             font-size: 2rem;
             font-weight: 700;
@@ -139,62 +157,208 @@
             color: #1fa9c9;
             text-align: center;
         }
+
         .observations p {
             text-align: justify;
             color: #555;
         }
+
         /* Ajustes responsivos */
         @media (max-width: 768px) {
             body {
                 margin: 20px;
             }
+
             .main-header h1 {
                 font-size: 2.5rem;
             }
+
             .section-header h2 {
                 font-size: 2rem;
             }
-            .info h3, .observations h2 {
+
+            .info h3,
+            .observations h2 {
                 font-size: 1.5rem;
             }
+
             .chart-placeholder h4 {
                 font-size: 1.4rem;
             }
         }
+
         /* Evitar saltos de página dentro de secciones */
         .page-section {
             page-break-after: always;
             page-break-inside: avoid;
         }
+
         .page-section:last-child {
             page-break-after: auto;
         }
+
+        .section-content {
+            margin-top: 30px;
+        }
     </style>
 </head>
+
 <body>
     <div class="page-overlay"></div>
-    <div class="content-wrapper">
-        <div class="report-header">
-            <div class="logo-container">
-                <img src="https://kimenko.cl/wp-content/uploads/2020/06/cropped-logo3.jpg" alt="Company Logo" style="width: 180px;">
+    <div style="display: flex; justify-content: center; min-height: 100vh;">
+        <div class="content-wrapper" style="width: 100%; max-width: 250mm; margin: 0 20px;">
+            <div class="report-header">
+                <div class="logo-container">
+                    <img src="file://{{ logo_path }}" alt="Company Logo" style="width: 180px;">
+                </div>
+                <div class="report-info">
+                    <h1>{{ title }}</h1>
+                    <p>Informe generado: {{ created_at.strftime('%d de %B, %Y') }}</p>
+                    <p>Ubicación: {{ place_name }}</p>
+                </div>
             </div>
-            <div class="report-info">
-                <h1>{{ title }}</h1>
-                <p>Informe generado: {{ created_at.strftime('%d de %B, %Y') }}</p>
-                <p>Ubicación: {{ place_name }}</p>
+
+            <div class="executive-summary">
+                <h2>Resumen Ejecutivo</h2>
+                <p> Reporte semanal con métricas clave de consumo, eficiencia y pérdidas del período. Incluye análisis
+                    por semana laboral y fin de semana.</p>
             </div>
-        </div>
 
-        <div class="executive-summary">
-            <h2>Resumen Ejecutivo</h2>
-            <p>Este informe presenta un análisis detallado del consumo de agua, destacando métricas clave y tendencias significativas para la toma de decisiones.</p>
-        </div>
-
-        {% for section in sections %}
+            <!-- Weekly Analysis Sections -->
+            {% for section in sections %}
+            {% if section.template_name == 'weekday.html' %}
             <div class="page-section content-section">
                 {% include section.template_name %}
             </div>
-        {% endfor %}
+            {% endif %}
+            {% endfor %}
+
+            <!-- Comparison Cards Section -->
+            {% for section in sections %}
+            {% if section.template_name == 'comparison.html' %}
+            <div class="page-section"
+                style="page-break-before: always; display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 60px;">
+                <div style="width: 100%; max-width: 210mm;">
+                    <h2 style="color: #2c3e50; text-align: center; margin-bottom: 30px; font-size: 24px;">Comparación
+                        Mensual</h2>
+                    <!-- Weekly Cards Grid -->
+                    <div class="comparison-grid"
+                        style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px; margin-bottom: 40px;">
+                        {% for week in section.data.weeks %}
+                        <div
+                            style="background: white; border-radius: 12px; padding: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid #e1e8ed;">
+                            <h3 style="color: {{ week.color }}; margin: 0 0 15px 0; font-size: 20px;">{{ week.title }}
+                            </h3>
+                            <p style="color: #666; margin-bottom: 20px; font-size: 14px;">{{ week.dates }}</p>
+
+                            <!-- Metrics Grid -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <!-- Weekday Metrics -->
+                                <div>
+                                    <h4 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 16px;">Días Laborales</h4>
+                                    <div style="font-size: 13px; line-height: 1.6; white-space: nowrap;">
+                                        <p style="margin: 5px 0;">Consumo: <strong>{{ week.weekday_consumption }}
+                                                L</strong></p>
+                                        <p style="margin: 5px 0;">Eficiencia: <strong>{{ week.weekday_efficiency
+                                                }}%</strong></p>
+                                        <p style="margin: 5px 0;">Pérdidas: <strong>{{ week.weekday_wasted }} L</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                                <!-- Weekend Metrics -->
+                                <div>
+                                    <h4 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 16px;">Fin de Semana</h4>
+                                    <div style="font-size: 13px; line-height: 1.6; white-space: nowrap;">
+                                        <p style="margin: 5px 0;">Consumo: <strong>{{ week.weekend_consumption }}
+                                                L</strong></p>
+                                        <p style="margin: 5px 0;">Eficiencia: <strong>{{ week.weekend_efficiency
+                                                }}%</strong></p>
+                                        <p style="margin: 5px 0;">Pérdidas: <strong>{{ week.weekend_wasted }} L</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Table -->
+            <div class="page-section"
+                style="page-break-before: always; display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 60px;">
+                <div style="width: 100%; max-width: 210mm;">
+                    <h3 style="color: #2c3e50; text-align: center; margin-bottom: 20px; font-size: 20px;">Comparación de
+                        Métricas</h3>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                            <thead>
+                                <tr>
+                                    <th
+                                        style="padding: 12px; text-align: left; border-bottom: 2px solid #e1e8ed; color: #2c3e50;">
+                                        Métrica</th>
+                                    {% for week in section.data.weeks %}
+                                    <th
+                                        style="padding: 12px; text-align: center; border-bottom: 2px solid #e1e8ed; color: {{ week.color }};">
+                                        {{ week.title }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="padding: 12px; border-bottom: 1px solid #e1e8ed;">Consumo Laboral (L)
+                                    </td>
+                                    {% for week in section.data.weeks %}
+                                    <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e1e8ed;">{{
+                                        week.weekday_consumption }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px; border-bottom: 1px solid #e1e8ed;">Consumo Fin de Semana
+                                        (L)
+                                    </td>
+                                    {% for week in section.data.weeks %}
+                                    <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e1e8ed;">{{
+                                        week.weekend_consumption }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px; border-bottom: 1px solid #e1e8ed;">Eficiencia Laboral (%)
+                                    </td>
+                                    {% for week in section.data.weeks %}
+                                    <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e1e8ed;">{{
+                                        week.weekday_efficiency }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px; border-bottom: 1px solid #e1e8ed;">Eficiencia Fin de
+                                        Semana
+                                        (%)</td>
+                                    {% for week in section.data.weeks %}
+                                    <td style="padding: 12px; text-align: center; border-bottom: 1px solid #e1e8ed;">{{
+                                        week.weekend_efficiency }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trends Chart -->
+            <div class="page-section"
+                style="page-break-before: always; display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 60px;">
+                <div style="width: 100%; max-width: 210mm;">
+                    <h3 style="color: #2c3e50; text-align: center; margin-bottom: 20px; font-size: 20px;">Tendencias
+                        Semanales</h3>
+                    <img src="file://{{ section.data.weekly_trend_plot }}" alt="Tendencias Semanales"
+                        style="width: 100%; height: auto; object-fit: contain;">
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
     </div>
 </body>
+
 </html>

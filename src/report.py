@@ -5,6 +5,7 @@ import tempfile
 import base64
 from PIL import Image
 from io import BytesIO
+import os
 
 class Report:
     def __init__(self, title, place_name="", template_dir='templates'):
@@ -13,6 +14,9 @@ class Report:
         self.sections = []
         self.env = Environment(loader=FileSystemLoader(template_dir))
         self.created_at = datetime.now()
+        
+        # Add logo path
+        self.logo_path = os.path.abspath('static/logo-kimenko.png')
         
         # Optimize background image before encoding
         with Image.open('static/mountain.jpg') as img:
@@ -42,7 +46,8 @@ class Report:
             created_at=self.created_at,
             place_name=self.place_name,
             sections=self.sections,
-            background_image_base64=self.background_image_base64
+            background_image_base64=self.background_image_base64,
+            logo_path=self.logo_path
         )
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
