@@ -5,23 +5,88 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @page {
+            size: A4;
+            margin: 0mm;
+            padding: 0mm;
+            @top-left { content: ''; }
+            @top-right { content: ''; }
+            @bottom-left { content: ''; }
+            @bottom-right { content: ''; }
+            background: url('data:image/jpeg;base64,{{ background_image_base64 }}') no-repeat center center;
+            background-size: cover;
+        }
 
         body {
-            font-family: 'Roboto', Arial, sans-serif;
             margin: 0;
-            padding: 40px;
+            padding: 0;
+            font-family: 'Roboto', Arial, sans-serif;
             color: #2c3e50;
             line-height: 1.6;
         }
 
+        .page-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.7);
+            z-index: 1;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 2;
+            padding: 40px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .content-section {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            margin-top: 30px;
+        }
+
         .report-header {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 15px;
+            padding: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #1fa9c9;
-            padding-bottom: 20px;
             margin-bottom: 40px;
+        }
+
+        .executive-summary {
+            background: rgba(248, 250, 251, 0.6);
+            border-left: 4px solid #1fa9c9;
+            padding: 25px 30px;
+            margin-bottom: 50px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 15px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid #E5E8EC;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-section {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid #E5E8EC;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .logo-container {
@@ -33,14 +98,6 @@
             color: #7F8C8D;
         }
 
-        .executive-summary {
-            background-color: #F8FAFB;
-            border-left: 4px solid #1fa9c9;
-            padding: 25px 30px;
-            margin-bottom: 50px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -48,27 +105,11 @@
             margin: 30px 0;
         }
 
-        .metric-card {
-            background: white;
-            border: 1px solid #E5E8EC;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-
         .metric-value {
             font-size: 1.8rem;
             color: #1fa9c9;
             font-weight: 700;
             margin: 10px 0;
-        }
-
-        .chart-section {
-            background: white;
-            border: 1px solid #E5E8EC;
-            border-radius: 8px;
-            padding: 30px;
-            margin: 30px 0;
         }
 
         .chart-placeholder {
@@ -131,26 +172,29 @@
     </style>
 </head>
 <body>
-    <div class="report-header">
-        <div class="logo-container">
-            <img src="https://kimenko.cl/wp-content/uploads/2020/06/cropped-logo3.jpg" alt="Company Logo" style="width: 180px;">
+    <div class="page-overlay"></div>
+    <div class="content-wrapper">
+        <div class="report-header">
+            <div class="logo-container">
+                <img src="https://kimenko.cl/wp-content/uploads/2020/06/cropped-logo3.jpg" alt="Company Logo" style="width: 180px;">
+            </div>
+            <div class="report-info">
+                <h1>{{ title }}</h1>
+                <p>Informe generado: {{ created_at.strftime('%d de %B, %Y') }}</p>
+                <p>Ubicación: {{ place_name }}</p>
+            </div>
         </div>
-        <div class="report-info">
-            <h1>{{ title }}</h1>
-            <p>Informe generado: {{ created_at.strftime('%d de %B, %Y') }}</p>
-            <p>Ubicación: {{ place_name }}</p>
-        </div>
-    </div>
 
-    <div class="executive-summary">
-        <h2>Resumen Ejecutivo</h2>
-        <p>Este informe presenta un análisis detallado del consumo de agua, destacando métricas clave y tendencias significativas para la toma de decisiones.</p>
-    </div>
-
-    {% for section in sections %}
-        <div class="page-section">
-            {% include section.template_name %}
+        <div class="executive-summary">
+            <h2>Resumen Ejecutivo</h2>
+            <p>Este informe presenta un análisis detallado del consumo de agua, destacando métricas clave y tendencias significativas para la toma de decisiones.</p>
         </div>
-    {% endfor %}
+
+        {% for section in sections %}
+            <div class="page-section content-section">
+                {% include section.template_name %}
+            </div>
+        {% endfor %}
+    </div>
 </body>
 </html>

@@ -2,6 +2,9 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 import tempfile
+import base64
+from PIL import Image
+from io import BytesIO
 
 class Report:
     def __init__(self, title, place_name="", template_dir='templates'):
@@ -10,6 +13,24 @@ class Report:
         self.sections = []
         self.env = Environment(loader=FileSystemLoader(template_dir))
         self.created_at = datetime.now()
+        
+        # Optimize background image before encoding
+        with Image.open('static/mountain.jpg') as img:
+            # Resize image if too large (e.g., to max 1500px width)
+            max_width = 1500
+            if img.width > max_width:
+                ratio = max_width / img.width
+                new_size = (max_width, int(img.height * ratio))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # Convert to RGB if necessary
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            
+            # Save optimized image to bytes
+            buffer = BytesIO()
+            img.save(buffer, format='JPEG', quality=60, optimize=True)
+            self.background_image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
     def add_section(self, section):
         self.sections.append(section)
@@ -20,10 +41,15 @@ class Report:
             title=self.title,
             created_at=self.created_at,
             place_name=self.place_name,
-            sections=self.sections
+            sections=self.sections,
+            background_image_base64=self.background_image_base64
         )
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             pdf_file = temp_file.name
-            HTML(string=rendered_html).write_pdf(pdf_file)
+            HTML(string=rendered_html).write_pdf(
+                pdf_file,
+                optimize_images=True,
+                jpeg_quality=70
+            )
         return pdf_file

@@ -1,25 +1,34 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>Comparación Mensual</title>
     <style>
+        /* Add consistent margin to all sections */
+        .section-content {
+            margin-top: 30px;
+        }
+
         .comparison-grid {
             display: flex;
             flex-wrap: wrap;
             gap: 20px;
-            margin-bottom: 40px;
+            margin: 30px 0 40px 0;  /* Explicit margin top and bottom */
             justify-content: center;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
         }
 
         .week-card {
-            background: white;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
             flex: 1 1 calc(33.333% - 40px);
             max-width: 300px;
             text-align: center;
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .week-metrics {
@@ -44,10 +53,10 @@
 
         /* Sección de Comparación de Métricas */
         .metric-comparison {
-            background: white;
+            background: rgba(255, 255, 255, 0.7);
             padding: 25px;
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
             margin-bottom: 40px;
             max-width: 800px;
             margin-left: auto;
@@ -59,7 +68,8 @@
             border-collapse: collapse;
         }
 
-        .metric-table th, .metric-table td {
+        .metric-table th,
+        .metric-table td {
             padding: 12px 8px;
             text-align: center;
             font-size: 0.95rem;
@@ -84,37 +94,51 @@
                 flex: 1 1 100%;
             }
 
-            .metric-table th, .metric-table td {
+            .metric-table th,
+            .metric-table td {
                 font-size: 0.85rem;
                 padding: 10px 5px;
             }
         }
+
+        /* Add separate container for comparison chart */
+        .comparison-chart {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+            margin-bottom: 40px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
     </style>
 </head>
+
 <body>
     <h2 class="section-title">Comparación Mensual</h2>
 
     <!-- Tarjetas de Semanas -->
     <div class="comparison-grid">
         {% for week in section.data.weeks %}
-            <div class="week-card">
-                <h3>{{ week.title }}</h3>
-                <p>{{ week.dates }}</p>
-                <div class="week-metrics">
-                    <div class="metrics-section">
-                        <h4>Días Laborales</h4>
-                        <p>Consumo Total: <strong>{{ week.weekday_consumption }} L</strong></p>
-                        <p>Eficiencia: <strong>{{ week.weekday_efficiency }}%</strong></p>
-                        <p>Pérdidas: <strong>{{ week.weekday_wasted }} L</strong></p>
-                    </div>
-                    <div class="metrics-section">
-                        <h4>Fin de Semana</h4>
-                        <p>Consumo Total: <strong>{{ week.weekend_consumption }} L</strong></p>
-                        <p>Eficiencia: <strong>{{ week.weekend_efficiency }}%</strong></p>
-                        <p>Pérdidas: <strong>{{ week.weekend_wasted }} L</strong></p>
-                    </div>
+        <div class="week-card">
+            <h3>{{ week.title }}</h3>
+            <p>{{ week.dates }}</p>
+            <div class="week-metrics">
+                <div class="metrics-section">
+                    <h4>Días Laborales</h4>
+                    <p>Consumo Total: <strong>{{ week.weekday_consumption }} L</strong></p>
+                    <p>Eficiencia: <strong>{{ week.weekday_efficiency }}%</strong></p>
+                    <p>Pérdidas: <strong>{{ week.weekday_wasted }} L</strong></p>
+                </div>
+                <div class="metrics-section">
+                    <h4>Fin de Semana</h4>
+                    <p>Consumo Total: <strong>{{ week.weekend_consumption }} L</strong></p>
+                    <p>Eficiencia: <strong>{{ week.weekend_efficiency }}%</strong></p>
+                    <p>Pérdidas: <strong>{{ week.weekend_wasted }} L</strong></p>
                 </div>
             </div>
+        </div>
         {% endfor %}
     </div>
 
@@ -126,7 +150,7 @@
                 <tr>
                     <th>Métrica</th>
                     {% for week in section.data.weeks %}
-                        <th>{{ week.title }}</th>
+                    <th>{{ week.title }}</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -135,42 +159,42 @@
                 <tr>
                     <td>Consumo Laboral (L)</td>
                     {% for week in section.data.weeks %}
-                        <td>{{ week.weekday_consumption }}</td>
+                    <td>{{ week.weekday_consumption }}</td>
                     {% endfor %}
                 </tr>
                 <!-- Consumo Fin de Semana -->
                 <tr>
                     <td>Consumo Fin de Semana (L)</td>
                     {% for week in section.data.weeks %}
-                        <td>{{ week.weekend_consumption }}</td>
+                    <td>{{ week.weekend_consumption }}</td>
                     {% endfor %}
                 </tr>
                 <!-- Eficiencia Laboral -->
                 <tr>
                     <td>Eficiencia Laboral (%)</td>
                     {% for week in section.data.weeks %}
-                        <td>{{ week.weekday_efficiency }}</td>
+                    <td>{{ week.weekday_efficiency }}</td>
                     {% endfor %}
                 </tr>
                 <!-- Eficiencia Fin de Semana -->
                 <tr>
                     <td>Eficiencia Fin de Semana (%)</td>
                     {% for week in section.data.weeks %}
-                        <td>{{ week.weekend_efficiency }}</td>
+                    <td>{{ week.weekend_efficiency }}</td>
                     {% endfor %}
                 </tr>
                 <!-- Pérdidas Laborales -->
                 <tr>
                     <td>Pérdidas Laborales (L)</td>
                     {% for week in section.data.weeks %}
-                        <td>{{ week.weekday_wasted }}</td>
+                    <td>{{ week.weekday_wasted }}</td>
                     {% endfor %}
                 </tr>
                 <!-- Pérdidas Fin de Semana -->
                 <tr>
                     <td>Pérdidas Fin de Semana (L)</td>
                     {% for week in section.data.weeks %}
-                        <td>{{ week.weekend_wasted }}</td>
+                    <td>{{ week.weekend_wasted }}</td>
                     {% endfor %}
                 </tr>
             </tbody>
@@ -180,7 +204,9 @@
     <!-- Gráfico de Tendencias Semanales -->
     <div class="comparison-chart">
         <h3>Tendencias Semanales</h3>
-        <img src="file://{{ section.data.weekly_trend_plot }}" alt="Tendencias Semanales" style="width: 100%; height: auto; object-fit: contain;">
+        <img src="file://{{ section.data.weekly_trend_plot }}" alt="Tendencias Semanales"
+            style="width: 100%; height: auto; object-fit: contain;">
     </div>
 </body>
+
 </html>

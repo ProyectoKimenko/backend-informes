@@ -38,6 +38,11 @@ RUN apt-get update && apt-get install -y \
     libgirepository1.0-dev \
     libcairo2-dev \
     gir1.2-gtk-3.0 \
+    libpango1.0-dev \
+    libwebp-dev \
+    python3-cffi \
+    python3-brotli \
+    libpangoft2-1.0-0 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
