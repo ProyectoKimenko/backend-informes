@@ -50,14 +50,14 @@
                         </select>
                     </div>
                     <div>
-                        <label for="window_size" class="block text-sm font-bold mb-2">Tamaño de ventana:</label>
+                        <label for="window_size" class="block text-sm font-bold mb-2">Tamaño de ventana (minutos):</label>
                         <input type="number" id="window_size" name="window_size" value="{{ window_size }}"
                             class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                             min="1" max="1000">
                     </div>
                     <div>
                         <label for="year" class="block text-sm font-bold mb-2">Año:</label>
-                        <select id="year" name="year" onchange="populateWeeks()"
+                        <select id="year" name="year" onchange="updateWeekInfo()"
                             class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
                             {% for y in range(2023, 2025) %}
                             <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
@@ -65,34 +65,45 @@
                         </select>
                     </div>
                     <div>
-                        <label for="end_week" class="block text-sm font-bold mb-2">Semana Final:</label>
-                        <select id="end_week" name="end_week"
+                        <label for="start_week" class="block text-sm font-bold mb-2">Semana de Inicio:</label>
+                        <select id="start_week" name="start_week" onchange="updateWeekInfo()"
                             class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
                             {% for w in range(1, 53) %}
-                            <option value="{{ w }}" {% if w==end_week %}selected{% endif %}>
+                            <option value="{{ w }}">
                                 Semana {{ w }}
                             </option>
                             {% endfor %}
                         </select>
                     </div>
                     <div>
-                        <label for="num_weeks" class="block text-sm font-bold mb-2">Número de Semanas hacia atrás:</label>
-                        <input type="number" id="num_weeks" name="num_weeks" value="{{ num_weeks }}"
-                            class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                            min="1" max="4">
+                        <label for="end_week" class="block text-sm font-bold mb-2">Semana de Fin:</label>
+                        <select id="end_week" name="end_week" onchange="updateWeekInfo()"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
+                            {% for w in range(1, 53) %}
+                            <option value="{{ w }}">
+                                Semana {{ w }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
+                
+                <!-- Additional info about the selected week range -->
+                <div id="weekInfo" class="mb-6 text-center text-gray-600"></div>
+
                 <div class="flex space-x-4">
                     <button type="button" onclick="previewForm()"
                         class="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded">
                         Vista Previa
                     </button>
                     <button type="button" onclick="submitForm('/view_analysis')"
-                        class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                        class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+                        id="applyButton">
                         Aplicar
                     </button>
                     <button type="button" onclick="submitForm('/generate_weekly_pdf')"
-                        class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
+                        id="pdfButton">
                         Generar PDF
                     </button>
                 </div>
@@ -161,7 +172,8 @@
 
         window.onload = function () {
             fetchTableNames();
-            populateWeeks();
+            loadFormData();
+            updateWeekInfo();
         };
 
         function previewForm() {
@@ -169,36 +181,109 @@
             const formData = new FormData(form);
             const params = new URLSearchParams(formData);
 
-            // Open preview in new window/tab
             window.open(`/view_analysis?${params.toString()}`, '_blank');
-        }
-
-        function populateWeeks() {
-            const weekSelect = document.getElementById('end_week');
-            const currentSelection = weekSelect.value; // Store current selection
-            weekSelect.innerHTML = ''; // Clear existing options
-
-            // Add options for weeks 1-52
-            for (let w = 1; w <= 52; w++) {
-                const option = document.createElement('option');
-                option.value = w;
-                option.textContent = `Semana ${w}`;
-                if (w.toString() === currentSelection) { // Restore previous selection
-                    option.selected = true;
-                }
-                weekSelect.appendChild(option);
-            }
         }
 
         function submitForm(endpoint) {
             const form = document.getElementById('analysisForm');
-            const year = form.elements['year'].value;
-            const endWeek = form.elements['end_week'].value;
-            const windowSize = form.elements['window_size'].value;
-            const numWeeks = form.elements['num_weeks'].value;
+            const formData = new FormData(form);
+            const year = formData.get('year');
+            const startWeek = formData.get('start_week');
+            const endWeek = formData.get('end_week');
+            const windowSize = formData.get('window_size');
+            const tableName = formData.get('table_name');
 
-            const url = `${endpoint}?year=${year}&end_week=${endWeek}&window_size=${windowSize}&num_weeks=${numWeeks}`;
+            // num_weeks = endWeek - startWeek + 1
+            const numWeeks = endWeek - startWeek + 1;
+
+            const url = `${endpoint}?year=${year}&end_week=${endWeek}&window_size=${windowSize}&num_weeks=${numWeeks}&table_name=${tableName}&start_week=${startWeek}`;
             window.location.href = url;
+        }
+
+        // Save form data to local storage
+        function saveFormData() {
+            const form = document.getElementById('analysisForm');
+            const formData = new FormData(form);
+            formData.forEach((value, key) => {
+                localStorage.setItem(key, value);
+            });
+        }
+
+        // Load form data from local storage
+        function loadFormData() {
+            const form = document.getElementById('analysisForm');
+            Array.from(form.elements).forEach(element => {
+                if (element.name && localStorage.getItem(element.name)) {
+                    element.value = localStorage.getItem(element.name);
+                }
+            });
+        }
+
+        // Attach event listeners to save data on change
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('analysisForm');
+            form.addEventListener('change', saveFormData);
+        });
+
+        function updateWeekInfo() {
+            const year = parseInt(document.getElementById('year').value, 10);
+            const startWeek = parseInt(document.getElementById('start_week').value, 10);
+            const endWeek = parseInt(document.getElementById('end_week').value, 10);
+            const infoEl = document.getElementById('weekInfo');
+            const applyButton = document.getElementById('applyButton');
+            const pdfButton = document.getElementById('pdfButton');
+
+            if (!year || !startWeek || !endWeek) {
+                infoEl.innerHTML = '';
+                applyButton.disabled = true;
+                pdfButton.disabled = true;
+                return;
+            }
+
+            // Validate that endWeek >= startWeek
+            if (endWeek < startWeek) {
+                infoEl.innerHTML = `<p class="text-red-500 text-sm">La Semana de Fin debe ser mayor o igual que la Semana de Inicio.</p>`;
+                applyButton.disabled = true;
+                pdfButton.disabled = true;
+                return;
+            }
+
+            const numWeeks = endWeek - startWeek + 1;
+
+            // Check the 4-week limit
+            if (numWeeks > 4) {
+                infoEl.innerHTML = `<p class="text-red-500 text-sm">No se pueden seleccionar más de 4 semanas. Ajuste la Semana de Inicio o Fin.</p>`;
+                applyButton.disabled = true;
+                pdfButton.disabled = true;
+                return;
+            }
+
+            // Compute start and end dates from ISO weeks
+            const startDate = getDateOfISOWeek(year, startWeek, 1); // Monday of start week
+            const endDate = getDateOfISOWeek(year, endWeek, 7);     // Sunday of end week
+
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            const startStr = startDate.toLocaleDateString('es-ES', options);
+            const endStr = endDate.toLocaleDateString('es-ES', options);
+
+            infoEl.innerHTML = `
+                <p class="text-sm"><strong>Período seleccionado:</strong> Desde la Semana ${startWeek} (${startStr}) hasta la Semana ${endWeek} (${endStr})</p>
+                <p class="text-xs text-gray-500 italic">El análisis abarcará ${numWeeks} semana(s) completas (máx. 4).</p>
+            `;
+            applyButton.disabled = false;
+            pdfButton.disabled = false;
+        }
+
+        /**
+         * Helper function to get the date of a specific ISO week day.
+         * weekDay: Monday=1, ..., Sunday=7
+         */
+        function getDateOfISOWeek(year, week, weekDay) {
+            const simple = new Date(year, 0, 4);
+            const dayOfWeek = simple.getDay() || 7; 
+            const ISOweekStart = new Date(simple.getTime() - (dayOfWeek - 1) * 86400000);
+            const targetDate = new Date(ISOweekStart.getTime() + ((week - 1) * 7 + (weekDay - 1)) * 86400000);
+            return targetDate;
         }
     </script>
 </body>

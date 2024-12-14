@@ -23,7 +23,7 @@ from src.scrape import fetch_page_info
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 
-# Configure logging with more detailed format
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
@@ -33,7 +33,7 @@ logging.basicConfig(
     ]
 )
 
-# Create logger for this module
+# Create logger
 logger = logging.getLogger(__name__)
 logger.info("Starting application initialization")
 
@@ -72,7 +72,7 @@ def split_at_gaps(index, values, mask):
     gaps = np.where(time_diffs > pd.Timedelta(minutes=1))[0]
     segments = []
     start_idx = 0
-    
+
     for gap_idx in gaps:
         end_idx = np.where(mask)[0][gap_idx + 1]
         if end_idx > start_idx:
@@ -82,17 +82,24 @@ def split_at_gaps(index, values, mask):
             if np.sum(segment_mask) > 1:  # Ensure more than one point
                 segments.append((index[segment_mask], values[segment_mask]))
         start_idx = end_idx
-    
+
     # Handle the last segment
     segment_mask = mask.copy()
     segment_mask[:start_idx] = False
     if np.sum(segment_mask) > 1:
         segments.append((index[segment_mask], values[segment_mask]))
-    
+
     logger.debug(f"Created {len(segments)} segments")
     return segments
 
 def create_plot(data, title_prefix, date_str):
+    # Validate required columns
+    required_columns = ['Flow rate', 'RollingMin']
+    for col in required_columns:
+        if col not in data.columns:
+            logger.error(f"Missing required column '{col}' in data for plotting.")
+            raise ValueError(f"Missing required column '{col}' in data")
+
     logger.info(f"Creating plot for {title_prefix} - {date_str}")
     plt.figure(figsize=(12, 6))
     plt.style.use('default')
@@ -100,25 +107,24 @@ def create_plot(data, title_prefix, date_str):
     # Create masks for valid data
     flow_mask = ~np.isnan(data['Flow rate'])
     min_mask = ~np.isnan(data['RollingMin'])
-    min_mask = ~np.isnan(data['RollingMin'])
-    
+
     logger.debug(f"Valid flow data points: {np.sum(flow_mask)}")
     logger.debug(f"Valid min data points: {np.sum(min_mask)}")
-    
+
     # Plot flow rate segments
     flow_segments = split_at_gaps(data.index, data['Flow rate'], flow_mask)
     for x, y in flow_segments:
         plt.plot(x, y, color='#1f77b4', linewidth=2, 
-                label='Flujo total' if x is flow_segments[0][0] else "")
-    
+                 label='Flujo total' if x is flow_segments[0][0] else "")
+
     min_segments = split_at_gaps(data.index, data['RollingMin'], min_mask)
     for x, y in min_segments:
         if len(x) > 1:  # Ensure more than one point
             plt.plot(x, y, color='#d62728', linewidth=2, 
-                    label='Límite de desperdicio' if x is min_segments[0][0] else "")
+                     label='Límite de desperdicio' if x is min_segments[0][0] else "")
             plt.fill_between(x, 0, y, color='#d62728', alpha=0.3,
-                            label='Flujo desperdiciado' if x is min_segments[0][0] else "")
-    
+                             label='Flujo desperdiciado' if x is min_segments[0][0] else "")
+
     # Configure plot formatting
     plt.title(f'{title_prefix} - {date_str}', pad=20, fontsize=14)
     plt.xlabel('Tiempo', fontsize=12)
@@ -126,7 +132,7 @@ def create_plot(data, title_prefix, date_str):
     plt.grid(True, alpha=0.3)
     plt.legend(frameon=True, fancybox=True, shadow=True, fontsize=10)
     plt.tight_layout()
-    
+
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
         plt.savefig(temp_file.name, dpi=300, bbox_inches='tight')
         plt.close()
@@ -135,6 +141,18 @@ def create_plot(data, title_prefix, date_str):
 
 def create_weekly_trend_plot(weeks_data):
     logger.info(f"Creating weekly trend plot with {len(weeks_data)} weeks of data")
+
+    # Validate that weeks_data contains all required keys
+    required_keys = [
+        'weekday_consumption', 'weekend_consumption', 'weekday_efficiency', 
+        'weekend_efficiency', 'weekday_wasted', 'weekend_wasted', 'color'
+    ]
+    for i, w in enumerate(weeks_data, start=1):
+        for k in required_keys:
+            if k not in w:
+                logger.error(f"Missing key '{k}' in week data for Semana {i}.")
+                raise ValueError(f"Missing key '{k}' in week data")
+
     # Extract data
     weeks = [f"Semana {i + 1}" for i in range(len(weeks_data))]
     weekday_consumptions = [week['weekday_consumption'] for week in weeks_data]
@@ -150,14 +168,13 @@ def create_weekly_trend_plot(weeks_data):
     logger.debug(f"Weekday efficiencies: {weekday_efficiencies}")
     logger.debug(f"Weekend efficiencies: {weekend_efficiencies}")
 
-    # Create figure with larger size
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
     fig.suptitle('Tendencias Semanales de Consumo de Agua', fontsize=20, y=0.95)
 
     width = 0.35
     x = np.arange(len(weeks))
 
-    # Consumption and Losses Plot (now showing actual consumption and losses separately)
+    # Consumption and Losses Plot
     ax1.bar(x - width / 2, [c - w for c, w in zip(weekday_consumptions, weekday_losses)], width, 
             label='Consumo Laboral', color=colors)
     ax1.bar(x + width / 2, [c - w for c, w in zip(weekend_consumptions, weekend_losses)], width, 
@@ -168,7 +185,7 @@ def create_weekly_trend_plot(weeks_data):
     ax1.bar(x + width / 2, weekend_losses, width, 
             bottom=[c - w for c, w in zip(weekend_consumptions, weekend_losses)],
             label='Pérdidas Fin de Semana', color=[adjust_color_brightness(c, 0.3) for c in colors])
-    
+
     ax1.set_ylabel('Litros', fontsize=14)
     ax1.set_title('Consumo Total y Pérdidas por Semana', fontsize=16, pad=20)
     ax1.set_xticks(x)
@@ -176,20 +193,20 @@ def create_weekly_trend_plot(weeks_data):
     ax1.tick_params(axis='y', labelsize=12)
     ax1.legend(fontsize=12, bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    # Efficiency Plot with larger markers and fonts
+    # Efficiency Plot
     ax2.plot(weeks, weekday_efficiencies, marker='o', linewidth=3, markersize=12,
              color='#1fa9c9', label='Eficiencia Laboral')
     ax2.plot(weeks, weekend_efficiencies, marker='s', linewidth=3, markersize=12,
              color='#34495e', label='Eficiencia Fin de Semana')
-    
+
     for i, (weekday_eff, weekend_eff) in enumerate(zip(weekday_efficiencies, weekend_efficiencies)):
         ax2.annotate(f'{weekday_eff}%', (weeks[i], weekday_eff),
-                    textcoords="offset points", xytext=(0, 15),
-                    ha='center', fontsize=11, weight='bold')
+                     textcoords="offset points", xytext=(0, 15),
+                     ha='center', fontsize=11, weight='bold')
         ax2.annotate(f'{weekend_eff}%', (weeks[i], weekend_eff),
-                    textcoords="offset points", xytext=(0, -20),
-                    ha='center', fontsize=11, weight='bold')
-    
+                     textcoords="offset points", xytext=(0, -20),
+                     ha='center', fontsize=11, weight='bold')
+
     ax2.set_ylabel('Porcentaje de Eficiencia', fontsize=14)
     ax2.set_title('Eficiencia por Semana', fontsize=16, pad=20)
     ax2.grid(True, linestyle='--', alpha=0.7)
@@ -198,7 +215,7 @@ def create_weekly_trend_plot(weeks_data):
     ax2.legend(fontsize=12, bbox_to_anchor=(1.05, 1), loc='upper left')
 
     plt.tight_layout(rect=[0, 0, 0.85, 0.95], h_pad=0.8)
-    
+
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
         plt.savefig(temp_file.name, bbox_inches='tight', dpi=300)
         plt.close()
@@ -209,34 +226,34 @@ def create_weekly_trend_plot(weeks_data):
 def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List[Tuple[datetime, datetime]]:
     """
     Get start and end dates for specified week number(s).
-    Weeks start on Monday and end on Sunday based on ISO week numbering.
-    
-    Args:
-        year (int): The year.
-        week (int): The ISO week number.
-        num_weeks (int): Number of consecutive weeks to retrieve.
-
-    Returns:
-        List[Tuple[datetime, datetime]]: List of tuples containing (start_date, end_date) for each week.
+    Weeks start on Monday and end on Sunday (ISO week numbering).
     """
     week_ranges = []
+    if num_weeks < 1:
+        logger.error("num_weeks must be >= 1")
+        raise ValueError("num_weeks must be at least 1")
+
     for i in range(num_weeks):
         current_week = week + i
+        # If current_week < 1 or > 53, handle or raise error
+        if current_week < 1 or current_week > 53:
+            error_msg = f"Requested out-of-range week number: {current_week}. ISO weeks are typically between 1 and 53."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         try:
-            # Handle week overflow (e.g., week 53 in some years)
             iso_calendar = datetime.fromisocalendar(year, current_week, 1)
         except ValueError:
-            # If the current_week exceeds the number of weeks in the year, reset to week 1 of the next year
-            iso_calendar = datetime.fromisocalendar(year + 1, 1, 1)
-            current_week = 1
-        
-        # Start date: Monday
+            # If the current_week exceeds the number of weeks in the year, this might fail
+            error_msg = f"No valid week {current_week} found in year {year}."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         week_start = datetime.fromisocalendar(iso_calendar.year, current_week, 1)
-        # End date: Sunday at 23:59:59
         week_end = datetime.fromisocalendar(iso_calendar.year, current_week, 7).replace(hour=23, minute=59, second=59)
         week_ranges.append((week_start, week_end))
         logger.info(f"Week {current_week} of {iso_calendar.year}: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}")
-    
+
     return week_ranges
 
 
@@ -246,33 +263,53 @@ def ping():
     logger.debug("Ping request received")
     return {"status": "success", "message": "Pong"}
 
+
 @app.get("/view_analysis", response_class=HTMLResponse)
 async def view_analysis(
     request: Request, 
     table_name: str = "refugioAleman",
     window_size: int = 60, 
     end_week: int = None,
-    num_weeks: int = 4,
+    start_week: int = None,
     year: int = None
 ):
-    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, end_week={end_week}")
-    try:  
-        # Calculate start_week from end_week
-        start_week = end_week - num_weeks + 1
-        
+    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}, end_week={end_week}")
+    try:
+        # Validate inputs
+        if year is None or end_week is None or start_week is None:
+            error_msg = "Parameters 'year', 'start_week', and 'end_week' must be provided."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        if not (1 <= start_week <= 53 and 1 <= end_week <= 53):
+            error_msg = "Invalid 'start_week' or 'end_week'. Both must be between 1 and 53."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        if end_week < start_week:
+            error_msg = f"'end_week' ({end_week}) must be greater or equal to 'start_week' ({start_week})."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        num_weeks = end_week - start_week + 1
+        if num_weeks > 4:
+            error_msg = f"Cannot select more than 4 weeks. Selected: {num_weeks}."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+
         # Get week ranges
-        week_ranges = get_dates_from_week_number(year, start_week)
+        week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
         if not week_ranges:
             error_msg = f"No valid weeks found starting from week {start_week} of {year}."
             logger.error(error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
         
-        start_date = week_ranges[0][0]  # Start of first week
-        end_date = week_ranges[-1][1]   # End of last week
+        start_date = week_ranges[0][0]
+        end_date = week_ranges[-1][1]
         
         start_epoch = int(start_date.timestamp() * 1000)
         end_epoch = int(end_date.timestamp() * 1000)
-        logger.info(f"Calculated epochs: start={start_epoch}, end={end_epoch}")
+        logger.info(f"Calculated epochs for selected weeks: start={start_epoch}, end={end_epoch}")
 
         logger.info("Calling analyze_data function")
         analysis_results = analyze_data(
@@ -280,16 +317,25 @@ async def view_analysis(
             start_epoch=start_epoch,
             end_epoch=end_epoch
         )
-        
+
+        required_keys = [
+            "weekday_total", "weekend_total", "weekday_wasted", "weekend_wasted", 
+            "weekday_efficiency", "weekend_efficiency", "weekday_data", "weekend_data"
+        ]
+        for rk in required_keys:
+            if rk not in analysis_results:
+                error_msg = f"Missing '{rk}' in analysis results."
+                logger.error(error_msg)
+                raise HTTPException(status_code=500, detail=error_msg)
+
         if (analysis_results['weekday_total'] == 0 and 
             analysis_results['weekend_total'] == 0):
-            # No data found for the selected period
             return templates.TemplateResponse("analysis.html", {
                 "request": request,
-                "error_message": f"No se encontraron datos para el período seleccionado: Semanas {start_week}-{start_week + num_weeks - 1}, {year}",
+                "error_message": f"No se encontraron datos para el período seleccionado: Semanas {start_week}-{end_week}, {year}",
                 "plot_url": None,
                 "window_size": window_size,
-                "start_week": start_week,
+                "end_week": end_week,
                 "year": year,
                 "total_water_wasted_weekdays": 0,
                 "efficiency_percentage_weekdays": 0,
@@ -300,16 +346,17 @@ async def view_analysis(
             })
         
         logger.info("Successfully got analysis results")
-                                      
+
+        # Combine weekday and weekend data
         combined_data = pd.concat([
             analysis_results['weekday_data'],
             analysis_results['weekend_data']
         ])
-        
+
         logger.info("Creating plot")
         plot_file = create_plot(
             combined_data,
-            f'Análisis Semanas {start_week}-{start_week + num_weeks - 1} - {year}',
+            f'Análisis Semanas {start_week}-{end_week} - {year}',
             f'{year}-W{end_week:02d}'
         )
         plot_url = f"/static/{os.path.basename(plot_file)}"
@@ -329,6 +376,8 @@ async def view_analysis(
             "year": year,
             "error_message": None
         })
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Error in view_analysis: {str(e)}", exc_info=True)
         return templates.TemplateResponse("analysis.html", {
@@ -340,25 +389,33 @@ async def view_analysis(
             "year": year
         })
 
+
 @app.get("/generate_weekly_pdf", status_code=200)
 async def generate_weekly_pdf(
     year: int,
     end_week: int,
-    window_size: int = 60,
-    num_weeks: int = 4
+    start_week: int,
+    window_size: int = 60
 ):
-    logger.info(f"Starting generate_weekly_pdf with params: year={year}, end_week={end_week}, window_size={window_size}, num_weeks={num_weeks}")
+    logger.info(f"Starting generate_weekly_pdf with params: year={year}, start_week={start_week}, end_week={end_week}, window_size={window_size}")
     try:
-        # Calculate start_week from end_week
-        start_week = end_week - num_weeks + 1
-        
         # Validate inputs
-        if not 1 <= end_week <= 53:
-            error_msg = f"Invalid week number: {end_week}. Must be between 1 and 53."
+        if not (1 <= start_week <= 53 and 1 <= end_week <= 53):
+            error_msg = "Invalid 'start_week' or 'end_week'. Both must be between 1 and 53."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        if end_week < start_week:
+            error_msg = f"'end_week' ({end_week}) must be greater or equal to 'start_week' ({start_week})."
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        num_weeks = end_week - start_week + 1
+        if num_weeks > 4:
+            error_msg = f"Cannot select more than 4 weeks. Selected: {num_weeks}."
             logger.error(error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
         
-        # Get 4 week ranges
         week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
         if not week_ranges:
             error_msg = f"No valid weeks found starting from week {start_week} of {year}."
@@ -373,7 +430,7 @@ async def generate_weekly_pdf(
         weeks_data = []
         max_consumption = 0
         max_wasted = 0
-        
+
         for i, (week_start, week_end) in enumerate(week_ranges):
             week_number = start_week + i
             logger.info(f"Processing week {week_number}: {week_start} to {week_end}")
@@ -386,25 +443,37 @@ async def generate_weekly_pdf(
                 end_epoch=end_epoch
             )
             logger.info(f"Got analysis results for week {week_number}")
-            
-            # Create sections
+
+            # Check required keys
+            required_keys = [
+                "weekday_peak", "weekend_peak", "weekday_total", "weekday_wasted", "weekday_efficiency",
+                "weekend_total", "weekend_wasted", "weekend_efficiency", "weekday_data", "weekend_data"
+            ]
+            for rk in required_keys:
+                if rk not in analysis_results:
+                    error_msg = f"Missing '{rk}' in analysis results for week {week_number}."
+                    logger.error(error_msg)
+                    raise HTTPException(status_code=500, detail=error_msg)
+
+            weekday_peak = analysis_results.get('weekday_peak', {'day': 'N/A', 'consumption': 0})
+            weekend_peak = analysis_results.get('weekend_peak', {'day': 'N/A', 'consumption': 0})
+
             weekday_section = WeekdaySection(f"Semana {week_number} - Días Laborales")
             weekday_section.add_data("dates", f"{week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}")
-            weekday_section.add_data("peak_day", analysis_results['weekday_peak']['day'])
-            weekday_section.add_data("peak_consumption", analysis_results['weekday_peak']['consumption'])
+            weekday_section.add_data("peak_day", weekday_peak.get('day', 'N/A'))
+            weekday_section.add_data("peak_consumption", weekday_peak.get('consumption', 0))
             weekday_section.add_data("total_consumption", analysis_results['weekday_total'])
             weekday_section.add_data("wasted", analysis_results['weekday_wasted'])
             weekday_section.add_data("efficiency", analysis_results['weekday_efficiency'])
             
             weekend_section = WeekendSection(f"Semana {week_number} - Fin de Semana")
             weekend_section.add_data("dates", f"{week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}")
-            weekend_section.add_data("peak_day", analysis_results['weekend_peak']['day'])
-            weekend_section.add_data("peak_consumption", analysis_results['weekend_peak']['consumption'])
+            weekend_section.add_data("peak_day", weekend_peak.get('day', 'N/A'))
+            weekend_section.add_data("peak_consumption", weekend_peak.get('consumption', 0))
             weekend_section.add_data("total_consumption", analysis_results['weekend_total'])
             weekend_section.add_data("wasted", analysis_results['weekend_wasted'])
             weekend_section.add_data("efficiency", analysis_results['weekend_efficiency'])
             
-            # Add data for comparison section
             week_data = {
                 'title': f"Semana {week_number}",
                 'dates': f"{week_start.strftime('%d/%m/%Y')} - {week_end.strftime('%d/%m/%Y')}",
@@ -418,7 +487,6 @@ async def generate_weekly_pdf(
             }
             weeks_data.append(week_data)
             
-            # Update maximums
             max_consumption = max(max_consumption, 
                                   analysis_results['weekday_total'],
                                   analysis_results['weekend_total'])
@@ -426,7 +494,7 @@ async def generate_weekly_pdf(
                              analysis_results['weekday_wasted'],
                              analysis_results['weekend_wasted'])
             
-            # Create plots
+            # Create plots for the PDF
             weekday_plot = create_plot(
                 analysis_results['weekday_data'],
                 'Días Laborales',
@@ -461,22 +529,35 @@ async def generate_weekly_pdf(
         return FileResponse(
             pdf_file,
             media_type='application/pdf',
-            filename=f'water_analysis_weeks_{start_week}-{start_week + num_weeks - 1}_{year}.pdf'
+            filename=f'water_analysis_weeks_{start_week}-{end_week}_{year}.pdf'
         )
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Error generating weekly PDF: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/check_weeks", response_class=JSONResponse)
 async def check_weeks(year: int):
     """Check which weeks have data in the specified year"""
     logger.info(f"Checking data availability for weeks in {year}")
     try:
+        # Check Supabase credentials
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_KEY")
+        if not supabase_url or not supabase_key:
+            error_msg = "Supabase credentials not set."
+            logger.error(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+        supabase = create_client(supabase_url, supabase_key)
+
         weeks_data = {}
         
         # Get the total number of ISO weeks in the year
-        last_day = datetime(year, 12, 28)  # Use December 28th to ensure we're in the last week
+        last_day = datetime(year, 12, 28)  # December 28 is always in the last ISO week of the year
         total_weeks = last_day.isocalendar()[1]
         
         # Check each week of the year
@@ -488,27 +569,28 @@ async def check_weeks(year: int):
             start_epoch = int(week_start.timestamp() * 1000)
             end_epoch = int(week_end.timestamp() * 1000)
             
-            # Query Supabase for data in this week's range
-            supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
             response = supabase.table("refugioAleman") \
                 .select("*") \
                 .gte("Category", start_epoch) \
                 .lte("Category", end_epoch) \
                 .execute()
-                
-            has_data = len(response.data) > 100
+            
+            data_records = response.data if response.data else []
+            has_data = len(data_records) > 100
             
             weeks_data[week] = {
                 'has_data': has_data,
                 'start_date': week_start.strftime('%Y-%m-%d'),
                 'end_date': week_end.strftime('%Y-%m-%d'),
-                'records': len(response.data)
+                'records': len(data_records)
             }
             
-            logger.debug(f"Week {week}: {has_data} ({len(response.data)} records)")
+            logger.debug(f"Week {week}: {has_data} ({len(data_records)} records)")
         
         return {"year": year, "weeks": weeks_data}
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Error checking weeks: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -9817,3 +9817,622 @@ TypeError: unsupported operand type(s) for -: 'NoneType' and 'int'
 2024-12-14 03:50:08,195 - app - INFO - [app.py:44] - FastAPI app and templates initialized
 2024-12-14 03:50:14,150 - app - INFO - [app.py:38] - Starting application initialization
 2024-12-14 03:50:14,151 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:15:17,097 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:15:17,097 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:17:44,129 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:17:44,130 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:17:54,231 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=30
+2024-12-14 21:17:54,232 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:17:54,232 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:17:54,232 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:17:54,233 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:17:54,234 - app - INFO - [app.py:275] - Calculated epochs: start=1719792000000, end=1722211199000
+2024-12-14 21:17:54,234 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:17:54,235 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722211199000
+2024-12-14 21:17:55,001 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722211199000 "HTTP/2 200 OK"
+2024-12-14 21:17:55,302 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:17:55,311 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:17:55,314 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:17:55,586 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:17:55,587 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:17:55,588 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 27-30 - 2024 - 2024-W30
+2024-12-14 21:17:56,493 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpvggegw5z.png
+2024-12-14 21:17:56,494 - app - INFO - [app.py:316] - Plot created at: /static/tmpvggegw5z.png
+2024-12-14 21:18:17,467 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=21
+2024-12-14 21:18:17,467 - app - INFO - [app.py:238] - Week 21 of 2024: 2024-05-20 to 2024-05-26
+2024-12-14 21:18:17,467 - app - INFO - [app.py:238] - Week 22 of 2024: 2024-05-27 to 2024-06-02
+2024-12-14 21:18:17,467 - app - INFO - [app.py:238] - Week 23 of 2024: 2024-06-03 to 2024-06-09
+2024-12-14 21:18:17,468 - app - INFO - [app.py:238] - Week 24 of 2024: 2024-06-10 to 2024-06-16
+2024-12-14 21:18:17,469 - app - INFO - [app.py:275] - Calculated epochs: start=1716163200000, end=1718582399000
+2024-12-14 21:18:17,469 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:18:17,470 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1716163200000, end=1718582399000
+2024-12-14 21:18:17,698 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1716163200000&Category=lte.1718582399000 "HTTP/2 200 OK"
+2024-12-14 21:18:17,701 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:18:17,706 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:18:17,706 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:18:17,707 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1716163200000, end=1718582399000
+2024-12-14 21:21:03,442 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=21
+2024-12-14 21:21:03,443 - app - INFO - [app.py:238] - Week 21 of 2024: 2024-05-20 to 2024-05-26
+2024-12-14 21:21:03,443 - app - INFO - [app.py:238] - Week 22 of 2024: 2024-05-27 to 2024-06-02
+2024-12-14 21:21:03,444 - app - INFO - [app.py:238] - Week 23 of 2024: 2024-06-03 to 2024-06-09
+2024-12-14 21:21:03,444 - app - INFO - [app.py:238] - Week 24 of 2024: 2024-06-10 to 2024-06-16
+2024-12-14 21:21:03,444 - app - INFO - [app.py:275] - Calculated epochs: start=1716163200000, end=1718582399000
+2024-12-14 21:21:03,445 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:03,445 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1716163200000, end=1718582399000
+2024-12-14 21:21:03,870 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1716163200000&Category=lte.1718582399000 "HTTP/2 200 OK"
+2024-12-14 21:21:03,872 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:21:03,873 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:21:03,873 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:21:03,873 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1716163200000, end=1718582399000
+2024-12-14 21:21:08,890 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=1
+2024-12-14 21:21:08,891 - app - INFO - [app.py:238] - Week 1 of 2024: 2024-01-01 to 2024-01-07
+2024-12-14 21:21:08,891 - app - INFO - [app.py:238] - Week 2 of 2024: 2024-01-08 to 2024-01-14
+2024-12-14 21:21:08,891 - app - INFO - [app.py:238] - Week 3 of 2024: 2024-01-15 to 2024-01-21
+2024-12-14 21:21:08,892 - app - INFO - [app.py:238] - Week 4 of 2024: 2024-01-22 to 2024-01-28
+2024-12-14 21:21:08,893 - app - INFO - [app.py:275] - Calculated epochs: start=1704067200000, end=1706486399000
+2024-12-14 21:21:08,893 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:08,894 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1704067200000, end=1706486399000
+2024-12-14 21:21:09,121 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1704067200000&Category=lte.1706486399000 "HTTP/2 200 OK"
+2024-12-14 21:21:09,123 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:21:09,124 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:21:09,125 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:21:09,128 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1704067200000, end=1706486399000
+2024-12-14 21:21:11,883 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=3
+2024-12-14 21:21:11,884 - app - INFO - [app.py:238] - Week 3 of 2024: 2024-01-15 to 2024-01-21
+2024-12-14 21:21:11,884 - app - INFO - [app.py:238] - Week 4 of 2024: 2024-01-22 to 2024-01-28
+2024-12-14 21:21:11,884 - app - INFO - [app.py:238] - Week 5 of 2024: 2024-01-29 to 2024-02-04
+2024-12-14 21:21:11,885 - app - INFO - [app.py:238] - Week 6 of 2024: 2024-02-05 to 2024-02-11
+2024-12-14 21:21:11,885 - app - INFO - [app.py:275] - Calculated epochs: start=1705276800000, end=1707695999000
+2024-12-14 21:21:11,886 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:11,886 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1705276800000, end=1707695999000
+2024-12-14 21:21:12,100 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1705276800000&Category=lte.1707695999000 "HTTP/2 200 OK"
+2024-12-14 21:21:12,101 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:21:12,102 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:21:12,102 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:21:12,102 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1705276800000, end=1707695999000
+2024-12-14 21:21:16,159 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=27
+2024-12-14 21:21:16,159 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:21:16,159 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:21:16,159 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:21:16,160 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:21:16,161 - app - INFO - [app.py:275] - Calculated epochs: start=1719792000000, end=1722211199000
+2024-12-14 21:21:16,161 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:16,162 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722211199000
+2024-12-14 21:21:16,541 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722211199000 "HTTP/2 200 OK"
+2024-12-14 21:21:16,745 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:21:16,752 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:21:16,752 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:21:17,021 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:21:17,022 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:21:17,022 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 27-27 - 2024 - 2024-W27
+2024-12-14 21:21:17,821 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp5reht23d.png
+2024-12-14 21:21:17,821 - app - INFO - [app.py:316] - Plot created at: /static/tmp5reht23d.png
+2024-12-14 21:21:22,317 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=26
+2024-12-14 21:21:22,318 - app - INFO - [app.py:238] - Week 26 of 2024: 2024-06-24 to 2024-06-30
+2024-12-14 21:21:22,318 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:21:22,318 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:21:22,319 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:21:22,319 - app - INFO - [app.py:275] - Calculated epochs: start=1719187200000, end=1721606399000
+2024-12-14 21:21:22,320 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:22,320 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719187200000, end=1721606399000
+2024-12-14 21:21:22,688 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719187200000&Category=lte.1721606399000 "HTTP/2 200 OK"
+2024-12-14 21:21:22,840 - src.analysis - INFO - [analysis.py:23] - Query response data length: 9000
+2024-12-14 21:21:22,845 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (9000, 2)
+2024-12-14 21:21:22,846 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:21:23,045 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:21:23,046 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:21:23,047 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 26-26 - 2024 - 2024-W26
+2024-12-14 21:21:23,695 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpf85y86ut.png
+2024-12-14 21:21:23,695 - app - INFO - [app.py:316] - Plot created at: /static/tmpf85y86ut.png
+2024-12-14 21:21:29,291 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=25
+2024-12-14 21:21:29,291 - app - INFO - [app.py:238] - Week 25 of 2024: 2024-06-17 to 2024-06-23
+2024-12-14 21:21:29,292 - app - INFO - [app.py:238] - Week 26 of 2024: 2024-06-24 to 2024-06-30
+2024-12-14 21:21:29,293 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:21:29,294 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:21:29,295 - app - INFO - [app.py:275] - Calculated epochs: start=1718582400000, end=1721001599000
+2024-12-14 21:21:29,295 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:29,295 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1718582400000, end=1721001599000
+2024-12-14 21:21:29,648 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1718582400000&Category=lte.1721001599000 "HTTP/2 200 OK"
+2024-12-14 21:21:29,710 - src.analysis - INFO - [analysis.py:23] - Query response data length: 6000
+2024-12-14 21:21:29,714 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (6000, 2)
+2024-12-14 21:21:29,714 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:21:29,902 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:21:29,903 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:21:29,903 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 25-25 - 2024 - 2024-W25
+2024-12-14 21:21:30,447 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp9kjwle7u.png
+2024-12-14 21:21:30,447 - app - INFO - [app.py:316] - Plot created at: /static/tmp9kjwle7u.png
+2024-12-14 21:21:35,249 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=24
+2024-12-14 21:21:35,249 - app - INFO - [app.py:238] - Week 24 of 2024: 2024-06-10 to 2024-06-16
+2024-12-14 21:21:35,249 - app - INFO - [app.py:238] - Week 25 of 2024: 2024-06-17 to 2024-06-23
+2024-12-14 21:21:35,250 - app - INFO - [app.py:238] - Week 26 of 2024: 2024-06-24 to 2024-06-30
+2024-12-14 21:21:35,250 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:21:35,251 - app - INFO - [app.py:275] - Calculated epochs: start=1717977600000, end=1720396799000
+2024-12-14 21:21:35,251 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:35,252 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1717977600000, end=1720396799000
+2024-12-14 21:21:35,629 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1717977600000&Category=lte.1720396799000 "HTTP/2 200 OK"
+2024-12-14 21:21:35,657 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:21:35,659 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:21:35,660 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:21:35,731 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:21:35,732 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:21:35,733 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 24-24 - 2024 - 2024-W24
+2024-12-14 21:21:36,233 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmplxjsoiwx.png
+2024-12-14 21:21:36,233 - app - INFO - [app.py:316] - Plot created at: /static/tmplxjsoiwx.png
+2024-12-14 21:21:40,758 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=23
+2024-12-14 21:21:40,758 - app - INFO - [app.py:238] - Week 23 of 2024: 2024-06-03 to 2024-06-09
+2024-12-14 21:21:40,758 - app - INFO - [app.py:238] - Week 24 of 2024: 2024-06-10 to 2024-06-16
+2024-12-14 21:21:40,759 - app - INFO - [app.py:238] - Week 25 of 2024: 2024-06-17 to 2024-06-23
+2024-12-14 21:21:40,759 - app - INFO - [app.py:238] - Week 26 of 2024: 2024-06-24 to 2024-06-30
+2024-12-14 21:21:40,760 - app - INFO - [app.py:275] - Calculated epochs: start=1717372800000, end=1719791999000
+2024-12-14 21:21:40,760 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:21:40,761 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1717372800000, end=1719791999000
+2024-12-14 21:21:40,976 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1717372800000&Category=lte.1719791999000 "HTTP/2 200 OK"
+2024-12-14 21:21:40,977 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:21:40,977 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:21:40,978 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:21:40,978 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1717372800000, end=1719791999000
+2024-12-14 21:24:08,401 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=27
+2024-12-14 21:24:08,402 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:24:08,402 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:24:08,403 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:24:08,403 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:24:08,404 - app - INFO - [app.py:275] - Calculated epochs: start=1719792000000, end=1722211199000
+2024-12-14 21:24:08,404 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:24:08,405 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722211199000
+2024-12-14 21:24:09,253 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722211199000 "HTTP/2 200 OK"
+2024-12-14 21:24:09,458 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:24:09,464 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:24:09,465 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:24:09,728 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:24:09,729 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:24:09,730 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 27-27 - 2024 - 2024-W27
+2024-12-14 21:24:10,494 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpf2501hv3.png
+2024-12-14 21:24:10,494 - app - INFO - [app.py:316] - Plot created at: /static/tmpf2501hv3.png
+2024-12-14 21:24:19,051 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=28
+2024-12-14 21:24:19,051 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:24:19,052 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:24:19,052 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:24:19,052 - app - INFO - [app.py:238] - Week 31 of 2024: 2024-07-29 to 2024-08-04
+2024-12-14 21:24:19,053 - app - INFO - [app.py:275] - Calculated epochs: start=1720396800000, end=1722815999000
+2024-12-14 21:24:19,053 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:24:19,054 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1722815999000
+2024-12-14 21:24:19,452 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1720396800000&Category=lte.1722815999000 "HTTP/2 200 OK"
+2024-12-14 21:24:19,648 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:24:19,654 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:24:19,655 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:24:19,884 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:24:19,885 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:24:19,886 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 28-28 - 2024 - 2024-W28
+2024-12-14 21:24:20,859 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpnacf1xuh.png
+2024-12-14 21:24:20,860 - app - INFO - [app.py:316] - Plot created at: /static/tmpnacf1xuh.png
+2024-12-14 21:25:17,147 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=29
+2024-12-14 21:25:17,147 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:25:17,148 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:25:17,148 - app - INFO - [app.py:238] - Week 31 of 2024: 2024-07-29 to 2024-08-04
+2024-12-14 21:25:17,148 - app - INFO - [app.py:238] - Week 32 of 2024: 2024-08-05 to 2024-08-11
+2024-12-14 21:25:17,149 - app - INFO - [app.py:275] - Calculated epochs: start=1721001600000, end=1723420799000
+2024-12-14 21:25:17,149 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:25:17,149 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721001600000, end=1723420799000
+2024-12-14 21:25:17,563 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1721001600000&Category=lte.1723420799000 "HTTP/2 200 OK"
+2024-12-14 21:25:17,721 - src.analysis - INFO - [analysis.py:23] - Query response data length: 9000
+2024-12-14 21:25:17,726 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (9000, 2)
+2024-12-14 21:25:17,727 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:25:17,890 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:25:17,891 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:25:17,892 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 29-29 - 2024 - 2024-W29
+2024-12-14 21:25:18,563 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpdx72hsl7.png
+2024-12-14 21:25:18,563 - app - INFO - [app.py:316] - Plot created at: /static/tmpdx72hsl7.png
+2024-12-14 21:25:32,537 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=31
+2024-12-14 21:25:32,537 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:25:32,538 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:25:32,540 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:25:32,541 - app - INFO - [app.py:238] - Week 31 of 2024: 2024-07-29 to 2024-08-04
+2024-12-14 21:25:32,541 - app - INFO - [app.py:275] - Calculated epochs: start=1720396800000, end=1722815999000
+2024-12-14 21:25:32,542 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:25:32,542 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1722815999000
+2024-12-14 21:25:32,918 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1720396800000&Category=lte.1722815999000 "HTTP/2 200 OK"
+2024-12-14 21:25:33,108 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:25:33,115 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:25:33,115 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:25:33,342 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:25:33,343 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:25:33,343 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 28-31 - 2024 - 2024-W31
+2024-12-14 21:25:34,340 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmp1g8_rn2_.png
+2024-12-14 21:25:34,341 - app - INFO - [app.py:316] - Plot created at: /static/tmp1g8_rn2_.png
+2024-12-14 21:30:45,794 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:30:45,795 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:31:25,870 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=31, num_weeks=4
+2024-12-14 21:31:25,871 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:31:25,872 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:31:25,872 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:31:25,873 - app - INFO - [app.py:238] - Week 31 of 2024: 2024-07-29 to 2024-08-04
+2024-12-14 21:31:25,873 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1720396800000, end=1722815999000
+2024-12-14 21:31:25,873 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:31:25,874 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1722815999000
+2024-12-14 21:31:26,470 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1720396800000&Category=lte.1722815999000 "HTTP/2 200 OK"
+2024-12-14 21:31:26,663 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:31:26,670 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:31:26,670 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:31:26,902 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:31:26,903 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:31:26,903 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 28-31 - 2024 - 2024-W31
+2024-12-14 21:31:27,936 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpu6u810qt.png
+2024-12-14 21:31:27,936 - app - INFO - [app.py:316] - Plot created at: /static/tmpu6u810qt.png
+2024-12-14 21:31:35,959 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=31, num_weeks=1
+2024-12-14 21:31:35,960 - app - INFO - [app.py:238] - Week 31 of 2024: 2024-07-29 to 2024-08-04
+2024-12-14 21:31:35,961 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1722211200000, end=1722815999000
+2024-12-14 21:31:35,963 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:31:35,964 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1722211200000, end=1722815999000
+2024-12-14 21:31:36,313 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1722211200000&Category=lte.1722815999000 "HTTP/2 200 OK"
+2024-12-14 21:31:36,338 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:31:36,341 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:31:36,342 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:31:36,377 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:31:36,379 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:31:36,380 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 31-31 - 2024 - 2024-W31
+2024-12-14 21:31:36,845 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpoqzlqeit.png
+2024-12-14 21:31:36,846 - app - INFO - [app.py:316] - Plot created at: /static/tmpoqzlqeit.png
+2024-12-14 21:31:54,372 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=30, num_weeks=1
+2024-12-14 21:31:54,373 - app - INFO - [app.py:238] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:31:54,373 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1721606400000, end=1722211199000
+2024-12-14 21:31:54,374 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:31:54,374 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721606400000, end=1722211199000
+2024-12-14 21:31:54,740 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1721606400000&Category=lte.1722211199000 "HTTP/2 200 OK"
+2024-12-14 21:31:54,768 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:31:54,770 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:31:54,770 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:31:54,839 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:31:54,840 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:31:54,840 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 30-30 - 2024 - 2024-W30
+2024-12-14 21:31:55,349 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpk4tr7xzc.png
+2024-12-14 21:31:55,350 - app - INFO - [app.py:316] - Plot created at: /static/tmpk4tr7xzc.png
+2024-12-14 21:31:59,304 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=29, num_weeks=1
+2024-12-14 21:31:59,305 - app - INFO - [app.py:238] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:31:59,305 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1721001600000, end=1721606399000
+2024-12-14 21:31:59,305 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:31:59,306 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721001600000, end=1721606399000
+2024-12-14 21:31:59,672 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1721001600000&Category=lte.1721606399000 "HTTP/2 200 OK"
+2024-12-14 21:31:59,706 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:31:59,709 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:31:59,709 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:31:59,780 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:31:59,780 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:31:59,781 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 29-29 - 2024 - 2024-W29
+2024-12-14 21:32:00,261 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpbdabesxp.png
+2024-12-14 21:32:00,261 - app - INFO - [app.py:316] - Plot created at: /static/tmpbdabesxp.png
+2024-12-14 21:32:03,377 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=28, num_weeks=1
+2024-12-14 21:32:03,377 - app - INFO - [app.py:238] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:32:03,378 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1720396800000, end=1721001599000
+2024-12-14 21:32:03,378 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:32:03,379 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1721001599000
+2024-12-14 21:32:03,734 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1720396800000&Category=lte.1721001599000 "HTTP/2 200 OK"
+2024-12-14 21:32:03,762 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:32:03,764 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:32:03,765 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:32:03,839 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:32:03,839 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:32:03,840 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 28-28 - 2024 - 2024-W28
+2024-12-14 21:32:04,327 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmpp3vfixv8.png
+2024-12-14 21:32:04,327 - app - INFO - [app.py:316] - Plot created at: /static/tmpp3vfixv8.png
+2024-12-14 21:32:08,275 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=27, num_weeks=1
+2024-12-14 21:32:08,276 - app - INFO - [app.py:238] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:32:08,276 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1719792000000, end=1720396799000
+2024-12-14 21:32:08,276 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:32:08,277 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000
+2024-12-14 21:32:08,628 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1720396799000 "HTTP/2 200 OK"
+2024-12-14 21:32:08,658 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:32:08,660 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:32:08,661 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:32:08,732 - app - INFO - [app.py:302] - Successfully got analysis results
+2024-12-14 21:32:08,732 - app - INFO - [app.py:309] - Creating plot
+2024-12-14 21:32:08,733 - app - INFO - [app.py:96] - Creating plot for Análisis Semanas 27-27 - 2024 - 2024-W27
+2024-12-14 21:32:09,253 - app - INFO - [app.py:133] - Plot saved to temporary file: /tmp/tmph_ha4zi9.png
+2024-12-14 21:32:09,254 - app - INFO - [app.py:316] - Plot created at: /static/tmph_ha4zi9.png
+2024-12-14 21:32:11,895 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=26, num_weeks=1
+2024-12-14 21:32:11,895 - app - INFO - [app.py:238] - Week 26 of 2024: 2024-06-24 to 2024-06-30
+2024-12-14 21:32:11,895 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1719187200000, end=1719791999000
+2024-12-14 21:32:11,896 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:32:11,896 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719187200000, end=1719791999000
+2024-12-14 21:32:12,114 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719187200000&Category=lte.1719791999000 "HTTP/2 200 OK"
+2024-12-14 21:32:12,117 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:32:12,119 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:32:12,120 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:32:12,121 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1719187200000, end=1719791999000
+2024-12-14 21:32:15,761 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=14, num_weeks=1
+2024-12-14 21:32:15,761 - app - INFO - [app.py:238] - Week 14 of 2024: 2024-04-01 to 2024-04-07
+2024-12-14 21:32:15,762 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1711929600000, end=1712534399000
+2024-12-14 21:32:15,762 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:32:15,763 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1711929600000, end=1712534399000
+2024-12-14 21:32:15,975 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1711929600000&Category=lte.1712534399000 "HTTP/2 200 OK"
+2024-12-14 21:32:15,975 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:32:15,976 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:32:15,977 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:32:15,978 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1711929600000, end=1712534399000
+2024-12-14 21:32:19,539 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=48, num_weeks=1
+2024-12-14 21:32:19,539 - app - INFO - [app.py:238] - Week 48 of 2024: 2024-11-25 to 2024-12-01
+2024-12-14 21:32:19,539 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1732492800000, end=1733097599000
+2024-12-14 21:32:19,540 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:32:19,540 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1732492800000, end=1733097599000
+2024-12-14 21:32:19,758 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1732492800000&Category=lte.1733097599000 "HTTP/2 200 OK"
+2024-12-14 21:32:19,759 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:32:19,760 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:32:19,762 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:32:19,762 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1732492800000, end=1733097599000
+2024-12-14 21:32:25,516 - app - INFO - [app.py:258] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=50, num_weeks=1
+2024-12-14 21:32:25,516 - app - INFO - [app.py:238] - Week 50 of 2024: 2024-12-09 to 2024-12-15
+2024-12-14 21:32:25,516 - app - INFO - [app.py:275] - Calculated epochs for selected weeks: start=1733702400000, end=1734307199000
+2024-12-14 21:32:25,517 - app - INFO - [app.py:277] - Calling analyze_data function
+2024-12-14 21:32:25,517 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1733702400000, end=1734307199000
+2024-12-14 21:32:25,746 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1733702400000&Category=lte.1734307199000 "HTTP/2 200 OK"
+2024-12-14 21:32:25,747 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:32:25,748 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:32:25,749 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:32:25,749 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1733702400000, end=1734307199000
+2024-12-14 21:34:38,883 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:34:38,883 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:34:41,588 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:34:41,589 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:36:36,410 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:36:36,411 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:36:42,370 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=40, num_weeks=1
+2024-12-14 21:36:42,371 - app - INFO - [app.py:255] - Week 40 of 2024: 2024-09-30 to 2024-10-06
+2024-12-14 21:36:42,371 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1727654400000, end=1728259199000
+2024-12-14 21:36:42,372 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:36:42,372 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1727654400000, end=1728259199000
+2024-12-14 21:36:42,934 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1727654400000&Category=lte.1728259199000 "HTTP/2 200 OK"
+2024-12-14 21:36:42,958 - src.analysis - INFO - [analysis.py:23] - Query response data length: 2696
+2024-12-14 21:36:42,966 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (2696, 2)
+2024-12-14 21:36:42,968 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:36:43,048 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:36:43,049 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:36:43,050 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 40-40 - 2024 - 2024-W40
+2024-12-14 21:36:43,550 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpkjnlf5sw.png
+2024-12-14 21:36:43,551 - app - INFO - [app.py:364] - Plot created at: /static/tmpkjnlf5sw.png
+2024-12-14 21:36:48,544 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=39, num_weeks=1
+2024-12-14 21:36:48,544 - app - INFO - [app.py:255] - Week 39 of 2024: 2024-09-23 to 2024-09-29
+2024-12-14 21:36:48,545 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1727049600000, end=1727654399000
+2024-12-14 21:36:48,545 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:36:48,545 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1727049600000, end=1727654399000
+2024-12-14 21:36:48,778 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1727049600000&Category=lte.1727654399000 "HTTP/2 200 OK"
+2024-12-14 21:36:48,780 - src.analysis - INFO - [analysis.py:23] - Query response data length: 0
+2024-12-14 21:36:48,780 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (0, 0)
+2024-12-14 21:36:48,781 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: []
+2024-12-14 21:36:48,782 - src.analysis - WARNING - [analysis.py:33] - No data found for period: start=1727049600000, end=1727654399000
+2024-12-14 21:36:51,809 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=41, num_weeks=1
+2024-12-14 21:36:51,810 - app - INFO - [app.py:255] - Week 41 of 2024: 2024-10-07 to 2024-10-13
+2024-12-14 21:36:51,810 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728259200000, end=1728863999000
+2024-12-14 21:36:51,810 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:36:51,810 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728259200000, end=1728863999000
+2024-12-14 21:36:52,161 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728259200000&Category=lte.1728863999000 "HTTP/2 200 OK"
+2024-12-14 21:36:52,189 - src.analysis - INFO - [analysis.py:23] - Query response data length: 2744
+2024-12-14 21:36:52,191 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (2744, 2)
+2024-12-14 21:36:52,192 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:36:52,261 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:36:52,262 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:36:52,262 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 41-41 - 2024 - 2024-W41
+2024-12-14 21:36:52,757 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmptwr4ep91.png
+2024-12-14 21:36:52,757 - app - INFO - [app.py:364] - Plot created at: /static/tmptwr4ep91.png
+2024-12-14 21:36:56,044 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=42, num_weeks=1
+2024-12-14 21:36:56,045 - app - INFO - [app.py:255] - Week 42 of 2024: 2024-10-14 to 2024-10-20
+2024-12-14 21:36:56,045 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728864000000, end=1729468799000
+2024-12-14 21:36:56,045 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:36:56,046 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728864000000, end=1729468799000
+2024-12-14 21:36:56,403 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728864000000&Category=lte.1729468799000 "HTTP/2 200 OK"
+2024-12-14 21:36:56,433 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3286
+2024-12-14 21:36:56,435 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3286, 2)
+2024-12-14 21:36:56,436 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:36:56,507 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:36:56,508 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:36:56,508 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 42-42 - 2024 - 2024-W42
+2024-12-14 21:36:56,986 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpbc75f884.png
+2024-12-14 21:36:56,986 - app - INFO - [app.py:364] - Plot created at: /static/tmpbc75f884.png
+2024-12-14 21:38:50,348 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=42, num_weeks=1
+2024-12-14 21:38:50,348 - app - INFO - [app.py:255] - Week 42 of 2024: 2024-10-14 to 2024-10-20
+2024-12-14 21:38:50,348 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728864000000, end=1729468799000
+2024-12-14 21:38:50,349 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:38:50,349 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728864000000, end=1729468799000
+2024-12-14 21:38:50,898 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728864000000&Category=lte.1729468799000 "HTTP/2 200 OK"
+2024-12-14 21:38:50,923 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3286
+2024-12-14 21:38:50,928 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3286, 2)
+2024-12-14 21:38:50,928 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:38:51,002 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:38:51,003 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:38:51,004 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 42-42 - 2024 - 2024-W42
+2024-12-14 21:38:51,512 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpjfh97qks.png
+2024-12-14 21:38:51,513 - app - INFO - [app.py:364] - Plot created at: /static/tmpjfh97qks.png
+2024-12-14 21:42:39,665 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=42, num_weeks=1
+2024-12-14 21:42:39,666 - app - INFO - [app.py:255] - Week 42 of 2024: 2024-10-14 to 2024-10-20
+2024-12-14 21:42:39,666 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728864000000, end=1729468799000
+2024-12-14 21:42:39,666 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:42:39,667 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728864000000, end=1729468799000
+2024-12-14 21:42:40,291 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728864000000&Category=lte.1729468799000 "HTTP/2 200 OK"
+2024-12-14 21:42:40,320 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3286
+2024-12-14 21:42:40,323 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3286, 2)
+2024-12-14 21:42:40,324 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:42:40,398 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:42:40,398 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:42:40,399 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 42-42 - 2024 - 2024-W42
+2024-12-14 21:42:40,885 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmprsp6vwya.png
+2024-12-14 21:42:40,885 - app - INFO - [app.py:364] - Plot created at: /static/tmprsp6vwya.png
+2024-12-14 21:45:02,684 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=42, num_weeks=1
+2024-12-14 21:45:02,684 - app - INFO - [app.py:255] - Week 42 of 2024: 2024-10-14 to 2024-10-20
+2024-12-14 21:45:02,685 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728864000000, end=1729468799000
+2024-12-14 21:45:02,685 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:45:02,685 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728864000000, end=1729468799000
+2024-12-14 21:45:03,255 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728864000000&Category=lte.1729468799000 "HTTP/2 200 OK"
+2024-12-14 21:45:03,284 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3286
+2024-12-14 21:45:03,287 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3286, 2)
+2024-12-14 21:45:03,287 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:45:03,361 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:45:03,361 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:45:03,361 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 42-42 - 2024 - 2024-W42
+2024-12-14 21:45:03,889 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpunm3hbrh.png
+2024-12-14 21:45:03,890 - app - INFO - [app.py:364] - Plot created at: /static/tmpunm3hbrh.png
+2024-12-14 21:48:21,441 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=42, num_weeks=1
+2024-12-14 21:48:21,441 - app - INFO - [app.py:255] - Week 42 of 2024: 2024-10-14 to 2024-10-20
+2024-12-14 21:48:21,442 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728864000000, end=1729468799000
+2024-12-14 21:48:21,443 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:48:21,443 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728864000000, end=1729468799000
+2024-12-14 21:48:21,999 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728864000000&Category=lte.1729468799000 "HTTP/2 200 OK"
+2024-12-14 21:48:22,029 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3286
+2024-12-14 21:48:22,032 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3286, 2)
+2024-12-14 21:48:22,033 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:48:22,102 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:48:22,103 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:48:22,104 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 42-42 - 2024 - 2024-W42
+2024-12-14 21:48:22,596 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpqyasj_h5.png
+2024-12-14 21:48:22,597 - app - INFO - [app.py:364] - Plot created at: /static/tmpqyasj_h5.png
+2024-12-14 21:50:18,042 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=42, num_weeks=1
+2024-12-14 21:50:18,042 - app - INFO - [app.py:255] - Week 42 of 2024: 2024-10-14 to 2024-10-20
+2024-12-14 21:50:18,043 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1728864000000, end=1729468799000
+2024-12-14 21:50:18,043 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:50:18,043 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1728864000000, end=1729468799000
+2024-12-14 21:50:18,420 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1728864000000&Category=lte.1729468799000 "HTTP/2 200 OK"
+2024-12-14 21:50:18,449 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3286
+2024-12-14 21:50:18,452 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3286, 2)
+2024-12-14 21:50:18,453 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:50:18,526 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:50:18,528 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:50:18,528 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 42-42 - 2024 - 2024-W42
+2024-12-14 21:50:19,022 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpdzojsfnv.png
+2024-12-14 21:50:19,022 - app - INFO - [app.py:364] - Plot created at: /static/tmpdzojsfnv.png
+2024-12-14 21:50:51,970 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, end_week=30, num_weeks=4
+2024-12-14 21:50:51,971 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:50:51,971 - app - INFO - [app.py:255] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:50:51,971 - app - INFO - [app.py:255] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:50:51,972 - app - INFO - [app.py:255] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:50:51,972 - app - INFO - [app.py:311] - Calculated epochs for selected weeks: start=1719792000000, end=1722211199000
+2024-12-14 21:50:51,972 - app - INFO - [app.py:313] - Calling analyze_data function
+2024-12-14 21:50:51,972 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722211199000
+2024-12-14 21:50:52,372 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722211199000 "HTTP/2 200 OK"
+2024-12-14 21:50:52,565 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:50:52,574 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:50:52,574 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:50:52,844 - app - INFO - [app.py:349] - Successfully got analysis results
+2024-12-14 21:50:52,845 - app - INFO - [app.py:357] - Creating plot
+2024-12-14 21:50:52,845 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 27-30 - 2024 - 2024-W30
+2024-12-14 21:50:53,654 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpmra8uvxz.png
+2024-12-14 21:50:53,655 - app - INFO - [app.py:364] - Plot created at: /static/tmpmra8uvxz.png
+2024-12-14 21:53:41,881 - app - INFO - [app.py:38] - Starting application initialization
+2024-12-14 21:53:41,881 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2024-12-14 21:53:48,089 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, start_week=27, end_week=30
+2024-12-14 21:53:48,089 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:53:48,090 - app - INFO - [app.py:255] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:53:48,091 - app - INFO - [app.py:255] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2024-12-14 21:53:48,091 - app - INFO - [app.py:255] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2024-12-14 21:53:48,091 - app - INFO - [app.py:312] - Calculated epochs for selected weeks: start=1719792000000, end=1722211199000
+2024-12-14 21:53:48,092 - app - INFO - [app.py:314] - Calling analyze_data function
+2024-12-14 21:53:48,092 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1722211199000
+2024-12-14 21:53:48,984 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1722211199000 "HTTP/2 200 OK"
+2024-12-14 21:53:49,183 - src.analysis - INFO - [analysis.py:23] - Query response data length: 12000
+2024-12-14 21:53:49,190 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (12000, 2)
+2024-12-14 21:53:49,190 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:53:49,463 - app - INFO - [app.py:348] - Successfully got analysis results
+2024-12-14 21:53:49,464 - app - INFO - [app.py:356] - Creating plot
+2024-12-14 21:53:49,465 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 27-30 - 2024 - 2024-W30
+2024-12-14 21:53:50,280 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpeidoddf5.png
+2024-12-14 21:53:50,281 - app - INFO - [app.py:363] - Plot created at: /static/tmpeidoddf5.png
+2024-12-14 21:53:55,460 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, start_week=27, end_week=28
+2024-12-14 21:53:55,461 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:53:55,461 - app - INFO - [app.py:255] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:53:55,461 - app - INFO - [app.py:312] - Calculated epochs for selected weeks: start=1719792000000, end=1721001599000
+2024-12-14 21:53:55,462 - app - INFO - [app.py:314] - Calling analyze_data function
+2024-12-14 21:53:55,462 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1721001599000
+2024-12-14 21:53:55,821 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1721001599000 "HTTP/2 200 OK"
+2024-12-14 21:53:55,883 - src.analysis - INFO - [analysis.py:23] - Query response data length: 6000
+2024-12-14 21:53:55,886 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (6000, 2)
+2024-12-14 21:53:55,887 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:53:56,020 - app - INFO - [app.py:348] - Successfully got analysis results
+2024-12-14 21:53:56,021 - app - INFO - [app.py:356] - Creating plot
+2024-12-14 21:53:56,021 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 27-28 - 2024 - 2024-W28
+2024-12-14 21:53:56,593 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmp2z5gu_ma.png
+2024-12-14 21:53:56,593 - app - INFO - [app.py:363] - Plot created at: /static/tmp2z5gu_ma.png
+2024-12-14 21:54:00,829 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, start_week=27, end_week=27
+2024-12-14 21:54:00,830 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:54:00,830 - app - INFO - [app.py:312] - Calculated epochs for selected weeks: start=1719792000000, end=1720396799000
+2024-12-14 21:54:00,830 - app - INFO - [app.py:314] - Calling analyze_data function
+2024-12-14 21:54:00,831 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000
+2024-12-14 21:54:01,184 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1720396799000 "HTTP/2 200 OK"
+2024-12-14 21:54:01,213 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:54:01,216 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:54:01,216 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:54:01,287 - app - INFO - [app.py:348] - Successfully got analysis results
+2024-12-14 21:54:01,288 - app - INFO - [app.py:356] - Creating plot
+2024-12-14 21:54:01,289 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 27-27 - 2024 - 2024-W27
+2024-12-14 21:54:01,766 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpw0yfe_0j.png
+2024-12-14 21:54:01,766 - app - INFO - [app.py:363] - Plot created at: /static/tmpw0yfe_0j.png
+2024-12-14 21:54:09,188 - app - INFO - [app.py:400] - Starting generate_weekly_pdf with params: year=2024, start_week=27, end_week=28, window_size=60
+2024-12-14 21:54:09,188 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:54:09,189 - app - INFO - [app.py:255] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2024-12-14 21:54:09,628 - app - INFO - [app.py:436] - Processing week 27: 2024-07-01 00:00:00 to 2024-07-07 23:59:59
+2024-12-14 21:54:09,629 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000
+2024-12-14 21:54:09,983 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1720396799000 "HTTP/2 200 OK"
+2024-12-14 21:54:10,011 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:54:10,014 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:54:10,014 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:54:10,083 - app - INFO - [app.py:445] - Got analysis results for week 27
+2024-12-14 21:54:10,084 - app - INFO - [app.py:103] - Creating plot for Días Laborales - 2024-07-01
+2024-12-14 21:54:10,528 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpyxd2ipbx.png
+2024-12-14 21:54:10,528 - app - INFO - [app.py:103] - Creating plot for Fin de Semana - 2024-07-01
+2024-12-14 21:54:11,027 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpp5fu4qfa.png
+2024-12-14 21:54:11,027 - app - INFO - [app.py:436] - Processing week 28: 2024-07-08 00:00:00 to 2024-07-14 23:59:59
+2024-12-14 21:54:11,028 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1721001599000
+2024-12-14 21:54:11,368 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1720396800000&Category=lte.1721001599000 "HTTP/2 200 OK"
+2024-12-14 21:54:11,399 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:54:11,403 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:54:11,403 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:54:11,473 - app - INFO - [app.py:445] - Got analysis results for week 28
+2024-12-14 21:54:11,473 - app - INFO - [app.py:103] - Creating plot for Días Laborales - 2024-07-08
+2024-12-14 21:54:11,923 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmp_j0s0f62.png
+2024-12-14 21:54:11,924 - app - INFO - [app.py:103] - Creating plot for Fin de Semana - 2024-07-08
+2024-12-14 21:54:12,359 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpqzty4ssr.png
+2024-12-14 21:54:12,360 - app - INFO - [app.py:143] - Creating weekly trend plot with 2 weeks of data
+2024-12-14 21:54:13,107 - app - INFO - [app.py:222] - Weekly trend plot saved to: /tmp/tmpwo5a8y8c.png
+2024-12-14 21:54:13,202 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 77:13, unknown property.
+2024-12-14 21:54:13,203 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 87:13, unknown property.
+2024-12-14 21:54:13,204 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 96:13, unknown property.
+2024-12-14 21:54:13,206 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1)` at 137:13, unknown property.
+2024-12-14 21:54:13,207 - weasyprint - WARNING - [media_queries.py:36] - Expected a media type, got '(max-width: 768px)'
+2024-12-14 21:54:13,208 - weasyprint - WARNING - [__init__.py:966] - Invalid media type ' (max-width: 768px) ' the whole @media rule was ignored at 160:9.
+2024-12-14 21:54:13,209 - weasyprint - WARNING - [__init__.py:188] - Ignored `min-height: 100vh` at 1:41, invalid value.
+2024-12-14 21:54:13,212 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.1)` at 1:56, unknown property.
+2024-12-14 21:54:13,213 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.1)` at 1:56, unknown property.
+2024-12-14 21:54:13,215 - weasyprint - WARNING - [__init__.py:188] - Ignored `overflow-x: auto` at 1:1, unknown property.
+2024-12-14 21:54:19,119 - app - INFO - [app.py:527] - PDF report rendered successfully: /tmp/tmpm5df603r.pdf
+2024-12-14 21:54:39,001 - app - INFO - [app.py:276] - Starting view_analysis with params: table=refugioAleman, window=60, year=2024, start_week=27, end_week=27
+2024-12-14 21:54:39,001 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:54:39,002 - app - INFO - [app.py:312] - Calculated epochs for selected weeks: start=1719792000000, end=1720396799000
+2024-12-14 21:54:39,002 - app - INFO - [app.py:314] - Calling analyze_data function
+2024-12-14 21:54:39,003 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000
+2024-12-14 21:54:39,366 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1720396799000 "HTTP/2 200 OK"
+2024-12-14 21:54:39,395 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:54:39,397 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:54:39,398 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:54:39,468 - app - INFO - [app.py:348] - Successfully got analysis results
+2024-12-14 21:54:39,469 - app - INFO - [app.py:356] - Creating plot
+2024-12-14 21:54:39,469 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 27-27 - 2024 - 2024-W27
+2024-12-14 21:54:39,970 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmp170qxa_0.png
+2024-12-14 21:54:39,971 - app - INFO - [app.py:363] - Plot created at: /static/tmp170qxa_0.png
+2024-12-14 21:54:42,563 - app - INFO - [app.py:400] - Starting generate_weekly_pdf with params: year=2024, start_week=27, end_week=27, window_size=60
+2024-12-14 21:54:42,563 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2024-12-14 21:54:42,977 - app - INFO - [app.py:436] - Processing week 27: 2024-07-01 00:00:00 to 2024-07-07 23:59:59
+2024-12-14 21:54:42,978 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000
+2024-12-14 21:54:43,315 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/refugioAleman?select=%2A&Category=gte.1719792000000&Category=lte.1720396799000 "HTTP/2 200 OK"
+2024-12-14 21:54:43,379 - src.analysis - INFO - [analysis.py:23] - Query response data length: 3000
+2024-12-14 21:54:43,381 - src.analysis - INFO - [analysis.py:29] - DataFrame shape: (3000, 2)
+2024-12-14 21:54:43,382 - src.analysis - INFO - [analysis.py:30] - Available columns in DataFrame: ['Category', 'Flow rate']
+2024-12-14 21:54:43,454 - app - INFO - [app.py:445] - Got analysis results for week 27
+2024-12-14 21:54:43,454 - app - INFO - [app.py:103] - Creating plot for Días Laborales - 2024-07-01
+2024-12-14 21:54:43,918 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmp0loyozzc.png
+2024-12-14 21:54:43,919 - app - INFO - [app.py:103] - Creating plot for Fin de Semana - 2024-07-01
+2024-12-14 21:54:44,366 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmp14gnkyh9.png
+2024-12-14 21:54:44,366 - app - INFO - [app.py:143] - Creating weekly trend plot with 1 weeks of data
+2024-12-14 21:54:45,035 - app - INFO - [app.py:222] - Weekly trend plot saved to: /tmp/tmpuxvfynde.png
+2024-12-14 21:54:45,110 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 77:13, unknown property.
+2024-12-14 21:54:45,111 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 87:13, unknown property.
+2024-12-14 21:54:45,111 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 96:13, unknown property.
+2024-12-14 21:54:45,113 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1)` at 137:13, unknown property.
+2024-12-14 21:54:45,113 - weasyprint - WARNING - [media_queries.py:36] - Expected a media type, got '(max-width: 768px)'
+2024-12-14 21:54:45,113 - weasyprint - WARNING - [__init__.py:966] - Invalid media type ' (max-width: 768px) ' the whole @media rule was ignored at 160:9.
+2024-12-14 21:54:45,114 - weasyprint - WARNING - [__init__.py:188] - Ignored `min-height: 100vh` at 1:41, invalid value.
+2024-12-14 21:54:47,191 - app - INFO - [app.py:527] - PDF report rendered successfully: /tmp/tmplesqpkcj.pdf
