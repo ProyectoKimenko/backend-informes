@@ -235,7 +235,7 @@
 
             <!-- Comparison Cards Section -->
             {% for section in sections %}
-            {% if section.template_name == 'comparison.html' %}
+            {% if section.template_name == 'comparison.html' and section.data.weeks|length > 1 %}
             <div class="page-section"
                 style="page-break-before: always; display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 60px;">
                 <div style="width: 100%; max-width: 210mm;">

@@ -205,37 +205,6 @@ def create_weekly_trend_plot(weeks_data):
         logger.info(f"Weekly trend plot saved to: {temp_file.name}")
     return temp_file.name
 
-def generate_pdf_report(weekly_data):
-    logger.info("Generating PDF report")
-    env = Environment(loader=FileSystemLoader('templates'))
-    template_week = env.get_template('pdf_week.html')
-    
-    rendered_html = ""
-    
-    # Create the weekly trend plot first
-    weekly_trend_plot = create_weekly_trend_plot(weekly_data)
-    
-    for week in weekly_data:
-        logger.debug(f"Rendering template for week: {week['dates']}")
-        rendered_html += template_week.render(
-            weekday_dates=week['dates'],
-            weekend_dates=week['dates'],
-            weekday_peak_day=week['weekday_peak_day'],
-            weekend_peak_day=week['weekend_peak_day'],
-            weekday_peak_consumption=week['weekday_peak_consumption'],
-            weekend_peak_consumption=week['weekend_peak_consumption'],
-            weekday_total_consumption=week['weekday_total'],
-            weekend_total_consumption=week['weekend_total'],
-            weekday_plot=week['weekday_plot'],
-            weekend_plot=week['weekend_plot'],
-            weekly_trend_plot=weekly_trend_plot  # Add the trend plot to the template context
-        )
-    
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-        pdf_file = temp_file.name
-        HTML(string=rendered_html).write_pdf(pdf_file)
-        logger.info(f"PDF report generated at: {pdf_file}")
-    return pdf_file
 
 def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List[Tuple[datetime, datetime]]:
     """
@@ -270,49 +239,6 @@ def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List
     
     return week_ranges
 
-# Function to get table names from Supabase
-def get_table_names():
-    logger.info("Fetching table names from Supabase")
-    supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_key = os.environ.get("SUPABASE_KEY")
-    
-    if not supabase_url or not supabase_key:
-        logger.error("Missing Supabase credentials")
-        raise ValueError("Missing Supabase credentials")
-        
-    supabase = create_client(supabase_url, supabase_key)
-    
-    # Directly query the information schema for table names
-    query = """
-    SELECT tablename
-    FROM pg_catalog.pg_tables
-    WHERE schemaname = 'public';
-    """
-    
-    try:
-        response = supabase.sql(query).execute()
-        if response.error:
-            logger.error(f"Supabase query error: {response.error.message}")
-            raise Exception(response.error.message)
-        
-        # Extract table names
-        table_names = [table['tablename'] for table in response.data]
-        logger.info(f"Found {len(table_names)} tables")
-        logger.debug(f"Table names: {table_names}")
-        return table_names
-    except Exception as e:
-        logger.error(f"Error fetching table names: {str(e)}")
-        raise
-
-@app.get("/tables", response_class=JSONResponse)
-async def fetch_tables():
-    logger.info("Handling /tables request")
-    try:
-        table_names = get_table_names()
-        return {"tables": table_names}
-    except Exception as e:
-        logger.error(f"Error in /tables endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # API Endpoints
 @app.get("/ping", status_code=200)
@@ -320,35 +246,20 @@ def ping():
     logger.debug("Ping request received")
     return {"status": "success", "message": "Pong"}
 
-@app.get("/analysis", status_code=200)
-def analysis():
-    logger.info("Starting analysis endpoint")
-    total_water_wasted, data_resampled, total_water_consumed, efficiency_percentage = analyze_data()
-    logger.info(f"Analysis completed - Efficiency: {efficiency_percentage}%")
-    return {
-        "status": "success", 
-        "total_water_wasted": total_water_wasted,
-        "total_water_consumed": total_water_consumed,
-        "efficiency_percentage": efficiency_percentage
-    }
-
 @app.get("/view_analysis", response_class=HTMLResponse)
 async def view_analysis(
     request: Request, 
     table_name: str = "refugioAleman",
     window_size: int = 60, 
-    start_week: int = None, 
+    end_week: int = None,
+    num_weeks: int = 4,
     year: int = None
 ):
-    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}")
-    try:
-        # If week/year not provided, use current date
-        if start_week is None or year is None:
-            now = datetime.now()
-            year = now.year
-            start_week = now.isocalendar()[1]  # Get current ISO week number
-            logger.info(f"Using current date: week={start_week}, year={year}")
-            
+    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, end_week={end_week}")
+    try:  
+        # Calculate start_week from end_week
+        start_week = end_week - num_weeks + 1
+        
         # Get week ranges
         week_ranges = get_dates_from_week_number(year, start_week)
         if not week_ranges:
@@ -375,7 +286,7 @@ async def view_analysis(
             # No data found for the selected period
             return templates.TemplateResponse("analysis.html", {
                 "request": request,
-                "error_message": f"No se encontraron datos para el período seleccionado: Semanas {start_week}-{start_week+3}, {year}",
+                "error_message": f"No se encontraron datos para el período seleccionado: Semanas {start_week}-{start_week + num_weeks - 1}, {year}",
                 "plot_url": None,
                 "window_size": window_size,
                 "start_week": start_week,
@@ -398,12 +309,12 @@ async def view_analysis(
         logger.info("Creating plot")
         plot_file = create_plot(
             combined_data,
-            f'Análisis Semanas {start_week}-{start_week+3} - {year}',
-            f'{year}-W{start_week:02d}'
+            f'Análisis Semanas {start_week}-{start_week + num_weeks - 1} - {year}',
+            f'{year}-W{end_week:02d}'
         )
         plot_url = f"/static/{os.path.basename(plot_file)}"
         logger.info(f"Plot created at: {plot_url}")
-        
+
         return templates.TemplateResponse("analysis.html", {
             "request": request,
             "total_water_wasted_weekdays": analysis_results['weekday_wasted'],
@@ -414,7 +325,7 @@ async def view_analysis(
             "total_water_consumed_weekends": analysis_results['weekend_total'],
             "plot_url": plot_url,
             "window_size": window_size,
-            "start_week": start_week,
+            "end_week": end_week,
             "year": year,
             "error_message": None
         })
@@ -425,33 +336,37 @@ async def view_analysis(
             "error_message": f"An error occurred: {str(e)}",
             "plot_url": None,
             "window_size": window_size,
-            "start_week": start_week,
+            "end_week": end_week,
             "year": year
         })
 
 @app.get("/generate_weekly_pdf", status_code=200)
 async def generate_weekly_pdf(
     year: int,
-    start_week: int,
-    window_size: int = 60
+    end_week: int,
+    window_size: int = 60,
+    num_weeks: int = 4
 ):
-    logger.info(f"Starting generate_weekly_pdf with params: year={year}, start_week={start_week}, window_size={window_size}")
+    logger.info(f"Starting generate_weekly_pdf with params: year={year}, end_week={end_week}, window_size={window_size}, num_weeks={num_weeks}")
     try:
+        # Calculate start_week from end_week
+        start_week = end_week - num_weeks + 1
+        
         # Validate inputs
-        if not 1 <= start_week <= 53:
-            error_msg = f"Invalid week number: {start_week}. Must be between 1 and 53."
+        if not 1 <= end_week <= 53:
+            error_msg = f"Invalid week number: {end_week}. Must be between 1 and 53."
             logger.error(error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
         
         # Get 4 week ranges
-        week_ranges = get_dates_from_week_number(year, start_week, num_weeks=4)
+        week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
         if not week_ranges:
             error_msg = f"No valid weeks found starting from week {start_week} of {year}."
             logger.error(error_msg)
             raise HTTPException(status_code=400, detail=error_msg)
         
         report = Report(
-            title=f"Informe de Consumo de Agua - Semanas {start_week}-{start_week + 3}, {year}",
+            title=f"Informe de Consumo de Agua - {week_ranges[0][0].strftime('%d/%m/%Y')} al {week_ranges[-1][1].strftime('%d/%m/%Y')}",
             place_name="Your Location"
         )
         
@@ -546,58 +461,12 @@ async def generate_weekly_pdf(
         return FileResponse(
             pdf_file,
             media_type='application/pdf',
-            filename=f'water_analysis_weeks_{start_week}-{start_week + 3}_{year}.pdf'
+            filename=f'water_analysis_weeks_{start_week}-{start_week + num_weeks - 1}_{year}.pdf'
         )
         
     except Exception as e:
         logger.error(f"Error generating weekly PDF: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/test_comparison_plot")
-async def test_comparison_plot():
-    logger.info("Starting test comparison plot generation")
-    test_weeks_data = [
-        {
-            'title': 'Semana 1',
-            'weekday_consumption': 1000,
-            'weekend_consumption': 800,
-            'weekday_efficiency': 85,
-            'weekend_efficiency': 80,
-            'weekday_wasted': 150,
-            'weekend_wasted': 160,
-            'color': WEEK_COLORS['Semana 1']
-        },
-        {
-            'title': 'Semana 2',
-            'weekday_consumption': 1200,
-            'weekend_consumption': 900,
-            'weekday_efficiency': 90,
-            'weekend_efficiency': 85,
-            'weekday_wasted': 120,
-            'weekend_wasted': 135,
-            'color': WEEK_COLORS['Semana 2']
-        },
-        {
-            'title': 'Semana 3',
-            'weekday_consumption': 950,
-            'weekend_consumption': 850,
-            'weekday_efficiency': 88,
-            'weekend_efficiency': 82,
-            'weekday_wasted': 114,
-            'weekend_wasted': 153,
-            'color': WEEK_COLORS['Semana 3']
-        }
-    ]
-    
-    logger.debug("Creating test comparison plot with sample data")
-    plot_file = create_weekly_trend_plot(test_weeks_data)
-    logger.info(f"Test comparison plot created: {plot_file}")
-    
-    return FileResponse(
-        plot_file,
-        media_type='image/png',
-        filename='test_comparison_plot.png'
-    )
 
 @app.get("/check_weeks", response_class=JSONResponse)
 async def check_weeks(year: int):
