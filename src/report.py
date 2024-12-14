@@ -17,6 +17,8 @@ class Report:
         
         # Add logo path
         self.logo_path = os.path.abspath('static/logo-kimenko.png')
+
+        
         
         # Optimize background image before encoding
         with Image.open('static/mountain.jpg') as img:

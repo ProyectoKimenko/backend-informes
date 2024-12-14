@@ -5,18 +5,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int = None):
-    logger.info(f"Analyzing data with window_size={window_size}, start={start_epoch}, end={end_epoch}")
+def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int = None, place_id: int = None):
+    logger.info(f"Analyzing data with window_size={window_size}, start={start_epoch}, end={end_epoch}, place_id={place_id}")
     
     # Initialize Supabase client
     supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
     
-    # Build the query
-    query = supabase.table("refugioAleman").select("*")
+    # Build the query on the new "measurements" table
+    query = supabase.table("measurements").select("*")
+    if place_id is not None:
+        query = query.eq("place_id", place_id)
     if start_epoch is not None:
-        query = query.gte("Category", start_epoch)
+        query = query.gte("timestamp", start_epoch)
     if end_epoch is not None:
-        query = query.lte("Category", end_epoch)
+        query = query.lte("timestamp", end_epoch)
     
     # Execute query and log the response
     response = query.execute()
@@ -30,78 +32,92 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
     logger.info(f"Available columns in DataFrame: {data.columns.tolist()}")
     
     if data.empty:
-        logger.warning(f"No data found for period: start={start_epoch}, end={end_epoch}")
+        # Return empty DataFrames with expected columns
+        empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
         return {
-            'weekday_data': pd.DataFrame(),
-            'weekend_data': pd.DataFrame(),
-            'weekday_wasted': 0,
-            'weekend_wasted': 0,
+            'weekday_data': empty_df,
+            'weekend_data': empty_df,
+            'weekday_peak': {'day': None, 'consumption': 0},
+            'weekend_peak': {'day': None, 'consumption': 0},
             'weekday_total': 0,
             'weekend_total': 0,
+            'weekday_wasted': 0,
+            'weekend_wasted': 0,
             'weekday_efficiency': 0,
-            'weekend_efficiency': 0,
-            'weekday_peak': {'day': None, 'consumption': 0},
-            'weekend_peak': {'day': None, 'consumption': 0}
+            'weekend_efficiency': 0
         }
     
-    # Convert Category to Timestamp and set as index
-    data['Timestamp'] = pd.to_datetime(data['Category'], unit='ms')
+    # Convert timestamp to datetime and set as index
+    # Assuming timestamp is in milliseconds
+    data['Timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
     data = data.set_index('Timestamp')  # Set Timestamp as the index
-    
-    # Now we can resample the data
+
+    # Resample data to 1-minute intervals, forward fill missing values
     data_resampled = data.resample('1T').mean().ffill()
+    logger.info(f"Columns after resampling: {data_resampled.columns.tolist()}")
     
     # Separate weekday and weekend data
     weekday_data = data_resampled[data_resampled.index.weekday < 5].copy()
     weekend_data = data_resampled[data_resampled.index.weekday >= 5].copy()
     
-    # Calculate rolling minimums for weekdays and weekends
+    # Add RollingMin calculations for both weekday and weekend data
     for df in [weekday_data, weekend_data]:
-        df['RollingMin_b'] = df['Flow rate'].shift(-window_size).rolling(window=window_size, min_periods=1).min()
-        df['RollingMin_f'] = df['Flow rate'].rolling(window=window_size, min_periods=1).min()
-        df['RollingMin_c'] = df['Flow rate'].rolling(window=window_size, min_periods=1, center=True).min()
+        # Compute rolling minimums across different windows (forward, backward, centered)
+        df['RollingMin_b'] = df['flow_rate'].shift(-window_size).rolling(window=window_size, min_periods=1).min()
+        df['RollingMin_f'] = df['flow_rate'].rolling(window=window_size, min_periods=1).min()
+        df['RollingMin_c'] = df['flow_rate'].rolling(window=window_size, min_periods=1, center=True).min()
         df['RollingMin'] = df[['RollingMin_f', 'RollingMin_b', 'RollingMin_c']].max(axis=1)
-        df['RollingMin'] = df.apply(lambda row: row['Flow rate'] if row['RollingMin'] > row['Flow rate'] else row['RollingMin'], axis=1)
+        # Ensure RollingMin never exceeds the actual flow_rate at that minute
+        df['RollingMin'] = df.apply(lambda row: min(row['flow_rate'], row['RollingMin']) if pd.notnull(row['RollingMin']) else row['flow_rate'], axis=1)
         df['RollingMin'] = df['RollingMin'].ffill()
     
-    # Safe calculation function
     def safe_int(value):
         try:
-            if pd.isna(value):
-                return 0
-            return int(value)
+            if isinstance(value, (float, int)):
+                if pd.isnull(value):
+                    return 0
+                return int(value)
+            return 0
         except:
             return 0
 
-    # Calculate metrics for weekdays with safety checks
+    # Calculate metrics for weekdays
     total_water_wasted_weekdays = safe_int(weekday_data['RollingMin'].sum())
-    total_water_consumed_weekdays = safe_int(weekday_data['Flow rate'].sum())
+    total_water_consumed_weekdays = safe_int(weekday_data['flow_rate'].sum())
     
     if total_water_consumed_weekdays > 0:
-        # Calculate efficiency as percentage NOT wasted (100% - wasted%)
         efficiency_percentage_weekdays = 100 - safe_int((total_water_wasted_weekdays / total_water_consumed_weekdays) * 100)
     else:
         efficiency_percentage_weekdays = 0
 
-    # Calculate metrics for weekends with safety checks
+    # Calculate metrics for weekends
     total_water_wasted_weekends = safe_int(weekend_data['RollingMin'].sum())
-    total_water_consumed_weekends = safe_int(weekend_data['Flow rate'].sum())
+    total_water_consumed_weekends = safe_int(weekend_data['flow_rate'].sum())
     
     if total_water_consumed_weekends > 0:
-        # Calculate efficiency as percentage NOT wasted (100% - wasted%)
         efficiency_percentage_weekends = 100 - safe_int((total_water_wasted_weekends / total_water_consumed_weekends) * 100)
     else:
         efficiency_percentage_weekends = 0
     
     # Calculate peak consumption for weekdays
-    weekday_peak_idx = weekday_data['Flow rate'].idxmax() if not weekday_data.empty else None
-    weekday_peak_consumption = weekday_data['Flow rate'].max() if not weekday_data.empty else 0
-    weekday_peak_day = weekday_peak_idx.strftime('%Y-%m-%d %H:%M') if weekday_peak_idx is not None else 'N/A'
+    if not weekday_data.empty:
+        weekday_peak_idx = weekday_data['flow_rate'].idxmax()
+        weekday_peak_consumption = weekday_data['flow_rate'].max()
+        weekday_peak_day = weekday_peak_idx.strftime('%Y-%m-%d %H:%M')
+    else:
+        weekday_peak_idx = None
+        weekday_peak_consumption = 0
+        weekday_peak_day = 'N/A'
     
     # Calculate peak consumption for weekends
-    weekend_peak_idx = weekend_data['Flow rate'].idxmax() if not weekend_data.empty else None
-    weekend_peak_consumption = weekend_data['Flow rate'].max() if not weekend_data.empty else 0
-    weekend_peak_day = weekend_peak_idx.strftime('%Y-%m-%d %H:%M') if weekend_peak_idx is not None else 'N/A'
+    if not weekend_data.empty:
+        weekend_peak_idx = weekend_data['flow_rate'].idxmax()
+        weekend_peak_consumption = weekend_data['flow_rate'].max()
+        weekend_peak_day = weekend_peak_idx.strftime('%Y-%m-%d %H:%M')
+    else:
+        weekend_peak_idx = None
+        weekend_peak_consumption = 0
+        weekend_peak_day = 'N/A'
     
     return {
         'weekday_data': weekday_data,

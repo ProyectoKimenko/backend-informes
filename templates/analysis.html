@@ -43,10 +43,12 @@
             <form class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg" id="analysisForm">
                 <div class="grid grid-cols-2 gap-4 mb-6">
                     <div>
-                        <label for="table_name" class="block text-sm font-bold mb-2">Lugar:</label>
-                        <select id="table_name" name="table_name"
+                        <label for="place_id" class="block text-sm font-bold mb-2">Lugar:</label>
+                        <select id="place_id" name="place_id"
                             class="w-full p-2 border rounded focus:ring-2 focus:ring-cyan-500 focus:border-transparent">
-                            <option value="refugioAleman" selected>Refugio Alemán</option>
+                            {% for place in places %}
+                            <option value="{{ place.id }}" {% if place.id == place_id %}selected{% endif %}>{{ place.name }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div>
@@ -153,29 +155,6 @@
     </div>
 
     <script>
-        async function fetchTableNames() {
-            try {
-                const response = await fetch('/tables');
-                const data = await response.json();
-                const tableSelect = document.getElementById('table_name');
-
-                data.tables.forEach(table => {
-                    const option = document.createElement('option');
-                    option.value = table;
-                    option.textContent = table;
-                    tableSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error fetching table names:', error);
-            }
-        }
-
-        window.onload = function () {
-            fetchTableNames();
-            loadFormData();
-            updateWeekInfo();
-        };
-
         function previewForm() {
             const form = document.getElementById('analysisForm');
             const formData = new FormData(form);
@@ -191,12 +170,10 @@
             const startWeek = formData.get('start_week');
             const endWeek = formData.get('end_week');
             const windowSize = formData.get('window_size');
-            const tableName = formData.get('table_name');
-
-            // num_weeks = endWeek - startWeek + 1
+            const placeId = formData.get('place_id');
             const numWeeks = endWeek - startWeek + 1;
 
-            const url = `${endpoint}?year=${year}&end_week=${endWeek}&window_size=${windowSize}&num_weeks=${numWeeks}&table_name=${tableName}&start_week=${startWeek}`;
+            const url = `${endpoint}?year=${year}&end_week=${endWeek}&window_size=${windowSize}&num_weeks=${numWeeks}&start_week=${startWeek}&place_id=${placeId}`;
             window.location.href = url;
         }
 
@@ -219,8 +196,10 @@
             });
         }
 
-        // Attach event listeners to save data on change
         document.addEventListener('DOMContentLoaded', () => {
+            loadFormData();
+            updateWeekInfo();
+
             const form = document.getElementById('analysisForm');
             form.addEventListener('change', saveFormData);
         });
@@ -274,10 +253,6 @@
             pdfButton.disabled = false;
         }
 
-        /**
-         * Helper function to get the date of a specific ISO week day.
-         * weekDay: Monday=1, ..., Sunday=7
-         */
         function getDateOfISOWeek(year, week, weekDay) {
             const simple = new Date(year, 0, 4);
             const dayOfWeek = simple.getDay() || 7; 

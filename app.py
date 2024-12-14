@@ -94,7 +94,7 @@ def split_at_gaps(index, values, mask):
 
 def create_plot(data, title_prefix, date_str):
     # Validate required columns
-    required_columns = ['Flow rate', 'RollingMin']
+    required_columns = ['flow_rate', 'RollingMin']
     for col in required_columns:
         if col not in data.columns:
             logger.error(f"Missing required column '{col}' in data for plotting.")
@@ -105,14 +105,14 @@ def create_plot(data, title_prefix, date_str):
     plt.style.use('default')
     
     # Create masks for valid data
-    flow_mask = ~np.isnan(data['Flow rate'])
+    flow_mask = ~np.isnan(data['flow_rate'])
     min_mask = ~np.isnan(data['RollingMin'])
 
     logger.debug(f"Valid flow data points: {np.sum(flow_mask)}")
     logger.debug(f"Valid min data points: {np.sum(min_mask)}")
 
     # Plot flow rate segments
-    flow_segments = split_at_gaps(data.index, data['Flow rate'], flow_mask)
+    flow_segments = split_at_gaps(data.index, data['flow_rate'], flow_mask)
     for x, y in flow_segments:
         plt.plot(x, y, color='#1f77b4', linewidth=2, 
                  label='Flujo total' if x is flow_segments[0][0] else "")
@@ -257,6 +257,11 @@ def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List
     return week_ranges
 
 
+# Initialize Supabase client
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_KEY")
+supabase = create_client(supabase_url, supabase_key)
+
 # API Endpoints
 @app.get("/ping", status_code=200)
 def ping():
@@ -267,14 +272,19 @@ def ping():
 @app.get("/view_analysis", response_class=HTMLResponse)
 async def view_analysis(
     request: Request, 
-    table_name: str = "refugioAleman",
+    table_name: str = "measurements",
     window_size: int = 60, 
     end_week: int = None,
     start_week: int = None,
-    year: int = None
+    year: int = None,
+    place_id: int = None
 ):
-    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}, end_week={end_week}")
+    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}, end_week={end_week}, place_id={place_id}")
     try:
+        # Query the "places" table
+        response = supabase.table("places").select("*").execute()
+        places = response.data if response.data else []
+
         # Validate inputs
         if year is None or end_week is None or start_week is None:
             error_msg = "Parameters 'year', 'start_week', and 'end_week' must be provided."
@@ -312,10 +322,12 @@ async def view_analysis(
         logger.info(f"Calculated epochs for selected weeks: start={start_epoch}, end={end_epoch}")
 
         logger.info("Calling analyze_data function")
+        # The analyze_data function now queries the "measurements" table internally
         analysis_results = analyze_data(
             window_size=window_size, 
             start_epoch=start_epoch,
-            end_epoch=end_epoch
+            end_epoch=end_epoch,
+            place_id=place_id
         )
 
         required_keys = [
@@ -342,7 +354,8 @@ async def view_analysis(
                 "total_water_consumed_weekdays": 0,
                 "total_water_wasted_weekends": 0,
                 "efficiency_percentage_weekends": 0,
-                "total_water_consumed_weekends": 0
+                "total_water_consumed_weekends": 0,
+                "places": places,
             })
         
         logger.info("Successfully got analysis results")
@@ -354,13 +367,17 @@ async def view_analysis(
         ])
 
         logger.info("Creating plot")
-        plot_file = create_plot(
-            combined_data,
-            f'Análisis Semanas {start_week}-{end_week} - {year}',
-            f'{year}-W{end_week:02d}'
-        )
-        plot_url = f"/static/{os.path.basename(plot_file)}"
-        logger.info(f"Plot created at: {plot_url}")
+        if combined_data.empty:
+            plot_url = None
+            logger.warning("No data available for plotting")
+        else:
+            plot_file = create_plot(
+                combined_data,
+                f'Análisis Semanas {start_week}-{end_week} - {year}',
+                f'{year}-W{end_week:02d}'
+            )
+            plot_url = f"/static/{os.path.basename(plot_file)}"
+            logger.info(f"Plot created at: {plot_url}")
 
         return templates.TemplateResponse("analysis.html", {
             "request": request,
@@ -374,7 +391,8 @@ async def view_analysis(
             "window_size": window_size,
             "end_week": end_week,
             "year": year,
-            "error_message": None
+            "error_message": None,
+            "places": places,
         })
     except HTTPException as he:
         raise he
@@ -386,7 +404,8 @@ async def view_analysis(
             "plot_url": None,
             "window_size": window_size,
             "end_week": end_week,
-            "year": year
+            "year": year,
+            "places": [],
         })
 
 
@@ -395,10 +414,18 @@ async def generate_weekly_pdf(
     year: int,
     end_week: int,
     start_week: int,
-    window_size: int = 60
+    window_size: int = 60,
+    place_id: int = None
 ):
-    logger.info(f"Starting generate_weekly_pdf with params: year={year}, start_week={start_week}, end_week={end_week}, window_size={window_size}")
+    logger.info(f"Starting generate_weekly_pdf with params: year={year}, start_week={start_week}, end_week={end_week}, window_size={window_size}, place_id={place_id}")
     try:
+        # Fetch places data
+        response = supabase.table("places").select("*").execute()
+        places = response.data if response.data else []
+
+        # Find the place name
+        place_name = next((place['name'] for place in places if place['id'] == place_id), "Unknown Location")
+
         # Validate inputs
         if not (1 <= start_week <= 53 and 1 <= end_week <= 53):
             error_msg = "Invalid 'start_week' or 'end_week'. Both must be between 1 and 53."
@@ -424,7 +451,7 @@ async def generate_weekly_pdf(
         
         report = Report(
             title=f"Informe de Consumo de Agua - {week_ranges[0][0].strftime('%d/%m/%Y')} al {week_ranges[-1][1].strftime('%d/%m/%Y')}",
-            place_name="Your Location"
+            place_name=place_name
         )
         
         weeks_data = []
@@ -440,7 +467,8 @@ async def generate_weekly_pdf(
             analysis_results = analyze_data(
                 window_size=window_size,
                 start_epoch=start_epoch,
-                end_epoch=end_epoch
+                end_epoch=end_epoch,
+                place_id=place_id
             )
             logger.info(f"Got analysis results for week {week_number}")
 
@@ -495,19 +523,30 @@ async def generate_weekly_pdf(
                              analysis_results['weekend_wasted'])
             
             # Create plots for the PDF
-            weekday_plot = create_plot(
-                analysis_results['weekday_data'],
-                'Días Laborales',
-                week_start.strftime('%Y-%m-%d')
-            )
-            weekend_plot = create_plot(
-                analysis_results['weekend_data'],
-                'Fin de Semana',
-                week_start.strftime('%Y-%m-%d')
-            )
-            
-            weekday_section.add_data("plot", weekday_plot)
-            weekend_section.add_data("plot", weekend_plot)
+            if analysis_results['weekday_data'].empty and analysis_results['weekend_data'].empty:
+                logger.warning(f"No data available for plotting week {week_number}")
+                weekday_section.add_data("plot", None)
+                weekend_section.add_data("plot", None)
+            else:
+                if not analysis_results['weekday_data'].empty:
+                    weekday_plot = create_plot(
+                        analysis_results['weekday_data'],
+                        'Días Laborales',
+                        week_start.strftime('%Y-%m-%d')
+                    )
+                    weekday_section.add_data("plot", weekday_plot)
+                else:
+                    weekday_section.add_data("plot", None)
+                    
+                if not analysis_results['weekend_data'].empty:
+                    weekend_plot = create_plot(
+                        analysis_results['weekend_data'],
+                        'Fin de Semana',
+                        week_start.strftime('%Y-%m-%d')
+                    )
+                    weekend_section.add_data("plot", weekend_plot)
+                else:
+                    weekend_section.add_data("plot", None)
             
             report.add_section(weekday_section)
             report.add_section(weekend_section)
@@ -557,7 +596,7 @@ async def check_weeks(year: int):
         weeks_data = {}
         
         # Get the total number of ISO weeks in the year
-        last_day = datetime(year, 12, 28)  # December 28 is always in the last ISO week of the year
+        last_day = datetime(year, 12, 28)
         total_weeks = last_day.isocalendar()[1]
         
         # Check each week of the year
@@ -569,10 +608,11 @@ async def check_weeks(year: int):
             start_epoch = int(week_start.timestamp() * 1000)
             end_epoch = int(week_end.timestamp() * 1000)
             
-            response = supabase.table("refugioAleman") \
+            # Query the new "measurements" table and "timestamp" field
+            response = supabase.table("measurements") \
                 .select("*") \
-                .gte("Category", start_epoch) \
-                .lte("Category", end_epoch) \
+                .gte("timestamp", start_epoch) \
+                .lte("timestamp", end_epoch) \
                 .execute()
             
             data_records = response.data if response.data else []
