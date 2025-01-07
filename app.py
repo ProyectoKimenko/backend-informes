@@ -28,8 +28,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('app.log')
+        logging.StreamHandler(sys.stdout)
     ]
 )
 
@@ -274,10 +273,10 @@ async def view_analysis(
     request: Request, 
     table_name: str = "measurements",
     window_size: int = 60, 
-    end_week: int = None,
-    start_week: int = None,
-    year: int = None,
-    place_id: int = None
+    end_week: int = 27,
+    start_week: int = 27,
+    year: int = 2024,
+    place_id: int = 1
 ):
     logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}, end_week={end_week}, place_id={place_id}")
     try:

@@ -11326,3 +11326,116 @@ TypeError: ufunc 'isnan' not supported for the input types, and the inputs could
 2024-12-14 22:42:34,293 - src.analysis - INFO - [analysis.py:25] - Query response data length: 0
 2024-12-14 22:42:34,295 - src.analysis - INFO - [analysis.py:31] - DataFrame shape: (0, 0)
 2024-12-14 22:42:34,296 - src.analysis - INFO - [analysis.py:32] - Available columns in DataFrame: []
+2025-01-07 16:04:20,054 - app - INFO - [app.py:38] - Starting application initialization
+2025-01-07 16:04:20,056 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2025-01-07 16:07:11,856 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=2024, start_week=28, end_week=None, place_id=None
+2025-01-07 16:07:13,416 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:07:13,427 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:07:17,595 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=None, start_week=None, end_week=None, place_id=None
+2025-01-07 16:07:18,430 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:07:18,431 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:07:21,007 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=None, start_week=None, end_week=None, place_id=None
+2025-01-07 16:07:21,231 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:07:21,242 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:07:31,533 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=None, start_week=None, end_week=None, place_id=None
+2025-01-07 16:07:32,152 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:07:32,153 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:08:07,179 - app - INFO - [app.py:38] - Starting application initialization
+2025-01-07 16:08:07,182 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2025-01-07 16:08:15,754 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=None, start_week=None, end_week=None, place_id=None
+2025-01-07 16:08:16,161 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:08:16,167 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:08:58,137 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=None, start_week=None, end_week=None, place_id=None
+2025-01-07 16:08:58,576 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:08:58,577 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:09:07,900 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=2024, start_week=29, end_week=None, place_id=None
+2025-01-07 16:09:08,308 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:09:08,310 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:09:10,346 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=2024, start_week=29, end_week=None, place_id=None
+2025-01-07 16:09:10,569 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:09:10,572 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:09:16,594 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=2024, start_week=27, end_week=None, place_id=None
+2025-01-07 16:09:16,938 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:09:16,942 - app - ERROR - [app.py:291] - Parameters 'year', 'start_week', and 'end_week' must be provided.
+2025-01-07 16:09:45,008 - app - INFO - [app.py:38] - Starting application initialization
+2025-01-07 16:09:45,010 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2025-01-07 16:09:49,684 - app - INFO - [app.py:38] - Starting application initialization
+2025-01-07 16:09:49,686 - app - INFO - [app.py:44] - FastAPI app and templates initialized
+2025-01-07 16:09:49,755 - app - INFO - [app.py:282] - Starting view_analysis with params: table=measurements, window=60, year=2024, start_week=27, end_week=27, place_id=1
+2025-01-07 16:09:50,203 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:09:50,209 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2025-01-07 16:09:50,210 - app - INFO - [app.py:322] - Calculated epochs for selected weeks: start=1719792000000, end=1720396799000
+2025-01-07 16:09:50,210 - app - INFO - [app.py:324] - Calling analyze_data function
+2025-01-07 16:09:50,211 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000, place_id=1
+2025-01-07 16:09:50,713 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/measurements?select=%2A&place_id=eq.1&timestamp=gte.1719792000000&timestamp=lte.1720396799000 "HTTP/2 200 OK"
+2025-01-07 16:09:50,717 - src.analysis - INFO - [analysis.py:25] - Query response data length: 430
+2025-01-07 16:09:50,728 - src.analysis - INFO - [analysis.py:31] - DataFrame shape: (430, 4)
+2025-01-07 16:09:50,729 - src.analysis - INFO - [analysis.py:32] - Available columns in DataFrame: ['id', 'place_id', 'flow_rate', 'timestamp']
+2025-01-07 16:09:50,808 - src.analysis - INFO - [analysis.py:57] - Columns after resampling: ['id', 'place_id', 'flow_rate', 'timestamp']
+2025-01-07 16:09:50,844 - app - INFO - [app.py:361] - Successfully got analysis results
+2025-01-07 16:09:50,848 - app - INFO - [app.py:369] - Creating plot
+2025-01-07 16:09:50,848 - app - INFO - [app.py:103] - Creating plot for Análisis Semanas 27-27 - 2024 - 2024-W27
+2025-01-07 16:09:51,381 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmp_1hpibyi.png
+2025-01-07 16:09:51,381 - app - INFO - [app.py:380] - Plot created at: /static/tmp_1hpibyi.png
+2025-01-07 16:10:30,809 - app - INFO - [app.py:420] - Starting generate_weekly_pdf with params: year=2024, start_week=27, end_week=30, window_size=60, place_id=1
+2025-01-07 16:10:31,326 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/places?select=%2A "HTTP/2 200 OK"
+2025-01-07 16:10:31,327 - app - INFO - [app.py:255] - Week 27 of 2024: 2024-07-01 to 2024-07-07
+2025-01-07 16:10:31,328 - app - INFO - [app.py:255] - Week 28 of 2024: 2024-07-08 to 2024-07-14
+2025-01-07 16:10:31,328 - app - INFO - [app.py:255] - Week 29 of 2024: 2024-07-15 to 2024-07-21
+2025-01-07 16:10:31,328 - app - INFO - [app.py:255] - Week 30 of 2024: 2024-07-22 to 2024-07-28
+2025-01-07 16:10:31,765 - app - INFO - [app.py:463] - Processing week 27: 2024-07-01 00:00:00 to 2024-07-07 23:59:59
+2025-01-07 16:10:31,766 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1719792000000, end=1720396799000, place_id=1
+2025-01-07 16:10:32,138 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/measurements?select=%2A&place_id=eq.1&timestamp=gte.1719792000000&timestamp=lte.1720396799000 "HTTP/2 200 OK"
+2025-01-07 16:10:32,151 - src.analysis - INFO - [analysis.py:25] - Query response data length: 430
+2025-01-07 16:10:32,155 - src.analysis - INFO - [analysis.py:31] - DataFrame shape: (430, 4)
+2025-01-07 16:10:32,155 - src.analysis - INFO - [analysis.py:32] - Available columns in DataFrame: ['id', 'place_id', 'flow_rate', 'timestamp']
+2025-01-07 16:10:32,162 - src.analysis - INFO - [analysis.py:57] - Columns after resampling: ['id', 'place_id', 'flow_rate', 'timestamp']
+2025-01-07 16:10:32,180 - app - INFO - [app.py:473] - Got analysis results for week 27
+2025-01-07 16:10:32,181 - app - INFO - [app.py:103] - Creating plot for Fin de Semana - 2024-07-01
+2025-01-07 16:10:32,609 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpddjsj24o.png
+2025-01-07 16:10:32,610 - app - INFO - [app.py:463] - Processing week 28: 2024-07-08 00:00:00 to 2024-07-14 23:59:59
+2025-01-07 16:10:32,610 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1720396800000, end=1721001599000, place_id=1
+2025-01-07 16:10:33,194 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/measurements?select=%2A&place_id=eq.1&timestamp=gte.1720396800000&timestamp=lte.1721001599000 "HTTP/2 200 OK"
+2025-01-07 16:10:33,201 - src.analysis - INFO - [analysis.py:25] - Query response data length: 2570
+2025-01-07 16:10:33,205 - src.analysis - INFO - [analysis.py:31] - DataFrame shape: (2570, 4)
+2025-01-07 16:10:33,205 - src.analysis - INFO - [analysis.py:32] - Available columns in DataFrame: ['id', 'place_id', 'flow_rate', 'timestamp']
+2025-01-07 16:10:33,216 - src.analysis - INFO - [analysis.py:57] - Columns after resampling: ['id', 'place_id', 'flow_rate', 'timestamp']
+2025-01-07 16:10:33,305 - app - INFO - [app.py:473] - Got analysis results for week 28
+2025-01-07 16:10:33,305 - app - INFO - [app.py:103] - Creating plot for Días Laborales - 2024-07-08
+2025-01-07 16:10:33,943 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpmi8tuhij.png
+2025-01-07 16:10:33,972 - app - INFO - [app.py:103] - Creating plot for Fin de Semana - 2024-07-08
+2025-01-07 16:10:34,539 - app - INFO - [app.py:139] - Plot saved to temporary file: /tmp/tmpltxbsi2i.png
+2025-01-07 16:10:34,539 - app - INFO - [app.py:463] - Processing week 29: 2024-07-15 00:00:00 to 2024-07-21 23:59:59
+2025-01-07 16:10:34,540 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721001600000, end=1721606399000, place_id=1
+2025-01-07 16:10:34,918 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/measurements?select=%2A&place_id=eq.1&timestamp=gte.1721001600000&timestamp=lte.1721606399000 "HTTP/2 200 OK"
+2025-01-07 16:10:34,919 - src.analysis - INFO - [analysis.py:25] - Query response data length: 0
+2025-01-07 16:10:34,921 - src.analysis - INFO - [analysis.py:31] - DataFrame shape: (0, 0)
+2025-01-07 16:10:34,921 - src.analysis - INFO - [analysis.py:32] - Available columns in DataFrame: []
+2025-01-07 16:10:34,922 - app - INFO - [app.py:473] - Got analysis results for week 29
+2025-01-07 16:10:34,923 - app - WARNING - [app.py:527] - No data available for plotting week 29
+2025-01-07 16:10:34,923 - app - INFO - [app.py:463] - Processing week 30: 2024-07-22 00:00:00 to 2024-07-28 23:59:59
+2025-01-07 16:10:34,923 - src.analysis - INFO - [analysis.py:9] - Analyzing data with window_size=60, start=1721606400000, end=1722211199000, place_id=1
+2025-01-07 16:10:35,301 - httpx - INFO - [_client.py:1038] - HTTP Request: GET https://mtyeznctoptxvnnkbvpl.supabase.co/rest/v1/measurements?select=%2A&place_id=eq.1&timestamp=gte.1721606400000&timestamp=lte.1722211199000 "HTTP/2 200 OK"
+2025-01-07 16:10:35,302 - src.analysis - INFO - [analysis.py:25] - Query response data length: 0
+2025-01-07 16:10:35,304 - src.analysis - INFO - [analysis.py:31] - DataFrame shape: (0, 0)
+2025-01-07 16:10:35,305 - src.analysis - INFO - [analysis.py:32] - Available columns in DataFrame: []
+2025-01-07 16:10:35,305 - app - INFO - [app.py:473] - Got analysis results for week 30
+2025-01-07 16:10:35,306 - app - WARNING - [app.py:527] - No data available for plotting week 30
+2025-01-07 16:10:35,307 - app - INFO - [app.py:143] - Creating weekly trend plot with 4 weeks of data
+2025-01-07 16:10:36,078 - app - INFO - [app.py:222] - Weekly trend plot saved to: /tmp/tmpm6kw3mx6.png
+2025-01-07 16:10:36,241 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 77:13, unknown property.
+2025-01-07 16:10:36,241 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 87:13, unknown property.
+2025-01-07 16:10:36,242 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)` at 96:13, unknown property.
+2025-01-07 16:10:36,244 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1)` at 137:13, unknown property.
+2025-01-07 16:10:36,248 - weasyprint - WARNING - [media_queries.py:36] - Expected a media type, got '(max-width: 768px)'
+2025-01-07 16:10:36,248 - weasyprint - WARNING - [__init__.py:966] - Invalid media type ' (max-width: 768px) ' the whole @media rule was ignored at 160:9.
+2025-01-07 16:10:36,250 - weasyprint - WARNING - [__init__.py:188] - Ignored `min-height: 100vh` at 1:41, invalid value.
+2025-01-07 16:10:36,258 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.1)` at 1:56, unknown property.
+2025-01-07 16:10:36,358 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.1)` at 1:56, unknown property.
+2025-01-07 16:10:36,360 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.1)` at 1:56, unknown property.
+2025-01-07 16:10:36,363 - weasyprint - WARNING - [__init__.py:188] - Ignored `box-shadow: 0 2px 4px rgba(0,0,0,0.1)` at 1:56, unknown property.
+2025-01-07 16:10:36,367 - weasyprint - WARNING - [__init__.py:188] - Ignored `overflow-x: auto` at 1:1, unknown property.
+2025-01-07 16:10:36,439 - weasyprint - ERROR - [images.py:345] - Failed to load image at 'file://None': URLError: <urlopen error [Errno 2] No such file or directory: ''>
+2025-01-07 16:10:41,657 - app - INFO - [app.py:566] - PDF report rendered successfully: /tmp/tmp37l33x4p.pdf
+2025-01-07 16:23:17,276 - app - INFO - [app.py:38] - Starting application initialization
+2025-01-07 16:23:17,278 - app - INFO - [app.py:44] - FastAPI app and templates initialized

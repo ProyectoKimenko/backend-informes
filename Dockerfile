@@ -7,33 +7,9 @@
 # Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
 ARG PYTHON_VERSION=3.12.4
-FROM python:${PYTHON_VERSION}-slim as base
+FROM python:${PYTHON_VERSION}-slim
 
-# Prevents Python from writing pyc files.
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# Keeps Python from buffering stdout and stderr to avoid situations where
-# the application crashes without emitting any logs due to buffering.
-ENV PYTHONUNBUFFERED=1
-
-WORKDIR /app
-
-# Create a non-privileged user that the app will run under.
-# See https://docs.docker.com/go/dockerfile-user-best-practices/
-ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
-
-# Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
-# Leverage a bind mount to requirements.txt to avoid having to copy them into
-# into this layer.
+# Install system dependencies including fonts
 RUN apt-get update && apt-get install -y \
     libgirepository1.0-dev \
     libcairo2-dev \
@@ -43,22 +19,36 @@ RUN apt-get update && apt-get install -y \
     python3-cffi \
     python3-brotli \
     libpangoft2-1.0-0 \
+    fonts-liberation \
+    libfontconfig1 \
+    libfreetype6 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-    
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    python -m pip install -r requirements.txt
+WORKDIR /app
 
-# Switch to the non-privileged user to run the application.
-USER appuser
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the source code into the container.
+# Copy application code
 COPY . .
 
-# Expose the port that the application listens on.
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/static/images && \
+    mkdir -p /app/matplotlib_cache && \
+    chmod -R 777 /app/static && \
+    chmod -R 777 /app/matplotlib_cache && \
+    chown -R root:root /app
+
+# Set environment variables
+ENV MPLCONFIGDIR=/app/matplotlib_cache
+ENV PYTHONPATH=/app
+ENV PORT=8000
+ENV PYTHONUNBUFFERED=1
+
+# Expose the port that the application listens on
 EXPOSE 8000
 
-# Run the application.
-CMD python3 -m uvicorn app:app --host=0.0.0.0 --port=8000 --reload
+# Run the application
+CMD uvicorn app:app --host 0.0.0.0 --port $PORT
