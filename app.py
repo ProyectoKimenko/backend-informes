@@ -226,12 +226,44 @@ def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List
     """
     Get start and end dates for specified week number(s).
     Weeks start on Monday and end on Sunday (ISO week numbering).
+    Handles year boundary cases correctly.
     """
     week_ranges = []
     if num_weeks < 1:
         logger.error("num_weeks must be >= 1")
         raise ValueError("num_weeks must be at least 1")
 
+    # Special handling for first weeks of the year
+    if week == 1:
+        # Get January 1st of the specified year
+        jan_first = datetime(year, 1, 1)
+        # Find the first Monday (or use Jan 1 if it's already Monday)
+        days_to_monday = (jan_first.weekday()) % 7
+        week_start = jan_first - timedelta(days=days_to_monday)
+        
+        # If week_start is in previous year but majority of week is in current year,
+        # use January 1st as the start date
+        if week_start.year < year and (jan_first - week_start).days > 3:
+            week_start = jan_first
+            
+        week_end = week_start + timedelta(days=6)
+        week_end = week_end.replace(hour=23, minute=59, second=59)
+        week_ranges.append((week_start, week_end))
+        logger.info(f"Special handling for Week 1: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}")
+        
+        # Adjust the remaining weeks if needed
+        for i in range(1, num_weeks):
+            next_week_start = week_end + timedelta(days=1)
+            next_week_start = next_week_start.replace(hour=0, minute=0, second=0)
+            next_week_end = next_week_start + timedelta(days=6)
+            next_week_end = next_week_end.replace(hour=23, minute=59, second=59)
+            week_ranges.append((next_week_start, next_week_end))
+            week_end = next_week_end
+            logger.info(f"Week {i+1}: {next_week_start.strftime('%Y-%m-%d')} to {next_week_end.strftime('%Y-%m-%d')}")
+            
+        return week_ranges
+    
+    # Existing logic for other weeks
     for i in range(num_weeks):
         current_week = week + i
         # If current_week < 1 or > 53, handle or raise error
