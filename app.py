@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +39,14 @@ logger.info("Starting application initialization")
 
 # Initialize FastAPI app and templates
 app = FastAPI()
+# Habilitar CORS para peticiones desde el frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory=tempfile.gettempdir()), name="static")
 logger.info("FastAPI app and templates initialized")
@@ -299,146 +308,96 @@ def ping():
     logger.debug("Ping request received")
     return {"status": "success", "message": "Pong"}
 
+@app.get("/places", response_class=JSONResponse)
+async def get_places():
+    """
+    Devuelve la lista de lugares desde la tabla 'places'.
+    """
+    try:
+        response = supabase.table("places").select("*").execute()
+        places = response.data if response.data else []
+        return {"places": places}
+    except Exception as e:
+        logger.error(f"Error fetching places: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error fetching places")
 
-@app.get("/view_analysis", response_class=HTMLResponse)
-async def view_analysis(
-    request: Request, 
-    table_name: str = "measurements",
-    window_size: int = 60, 
-    end_week: int = 27,
-    start_week: int = 27,
+@app.get("/analysis", response_class=JSONResponse)
+async def analysis_json(
+    window_size: int = 60,
+    start_week: int = 1,
+    end_week: int = 1,
     year: int = 2024,
     place_id: int = 1
 ):
-    logger.info(f"Starting view_analysis with params: table={table_name}, window={window_size}, year={year}, start_week={start_week}, end_week={end_week}, place_id={place_id}")
+    """
+    Devuelve métricas y serie temporal en JSON para renderizar en el frontend.
+    """
     try:
-        # Query the "places" table
-        response = supabase.table("places").select("*").execute()
-        places = response.data if response.data else []
-
-        # Validate inputs
-        if year is None or end_week is None or start_week is None:
-            error_msg = "Parameters 'year', 'start_week', and 'end_week' must be provided."
-            logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg)
-
+        # Validaciones básicas
         if not (1 <= start_week <= 53 and 1 <= end_week <= 53):
-            error_msg = "Invalid 'start_week' or 'end_week'. Both must be between 1 and 53."
-            logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg)
-
+            raise HTTPException(status_code=400, detail="Rango de semanas inválido")
         if end_week < start_week:
-            error_msg = f"'end_week' ({end_week}) must be greater or equal to 'start_week' ({start_week})."
-            logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg)
-
+            raise HTTPException(status_code=400, detail="end_week debe ser >= start_week")
         num_weeks = end_week - start_week + 1
         if num_weeks > 4:
-            error_msg = f"Cannot select more than 4 weeks. Selected: {num_weeks}."
-            logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(status_code=400, detail="No se pueden seleccionar más de 4 semanas")
 
-        # Get week ranges
+        # Calcular rangos de fechas
         week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
-        if not week_ranges:
-            error_msg = f"No valid weeks found starting from week {start_week} of {year}."
-            logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg)
-        
-        start_date = week_ranges[0][0]
-        end_date = week_ranges[-1][1]
-        
-        start_epoch = int(start_date.timestamp() * 1000)
-        end_epoch = int(end_date.timestamp() * 1000)
-        logger.info(f"Calculated epochs for selected weeks: start={start_epoch}, end={end_epoch}")
+        start_epoch = int(week_ranges[0][0].timestamp() * 1000)
+        end_epoch   = int(week_ranges[-1][1].timestamp() * 1000)
 
-        logger.info("Calling analyze_data function")
-        # The analyze_data function now queries the "measurements" table internally
-        analysis_results = analyze_data(
-            window_size=window_size, 
-            start_epoch=start_epoch,
-            end_epoch=end_epoch,
-            place_id=place_id
-        )
-
-        required_keys = [
-            "weekday_total", "weekend_total", "weekday_wasted", "weekend_wasted", 
-            "weekday_efficiency", "weekend_efficiency", "weekday_data", "weekend_data"
-        ]
-        for rk in required_keys:
-            if rk not in analysis_results:
-                error_msg = f"Missing '{rk}' in analysis results."
-                logger.error(error_msg)
-                raise HTTPException(status_code=500, detail=error_msg)
-
-        if (analysis_results['weekday_total'] == 0 and 
-            analysis_results['weekend_total'] == 0):
-            return templates.TemplateResponse("analysis.html", {
-                "request": request,
-                "error_message": f"No se encontraron datos para el período seleccionado: Semanas {start_week}-{end_week}, {year}",
-                "plot_url": None,
-                "window_size": window_size,
-                "end_week": end_week,
-                "year": year,
-                "total_water_wasted_weekdays": 0,
-                "efficiency_percentage_weekdays": 0,
-                "total_water_consumed_weekdays": 0,
-                "total_water_wasted_weekends": 0,
-                "efficiency_percentage_weekends": 0,
-                "total_water_consumed_weekends": 0,
-                "places": places,
-            })
-        
-        logger.info("Successfully got analysis results")
-
-        # Combine weekday and weekend data
-        combined_data = pd.concat([
-            analysis_results['weekday_data'],
-            analysis_results['weekend_data']
-        ])
-
-        logger.info("Creating plot")
-        if combined_data.empty:
-            plot_url = None
-            logger.warning("No data available for plotting")
-        else:
-            plot_file = create_plot(
-                combined_data,
-                f'Análisis Semanas {start_week}-{end_week} - {year}',
-                f'{year}-W{end_week:02d}'
+        # Ejecutar análisis
+        try:
+            results = analyze_data(
+                window_size=window_size,
+                start_epoch=start_epoch,
+                end_epoch=end_epoch,
+                place_id=place_id
             )
-            plot_url = f"/static/{os.path.basename(plot_file)}"
-            logger.info(f"Plot created at: {plot_url}")
+        except Exception as e:
+            # Si no hay datos, retorna time_series vacío y métricas en None
+            logger.warning(f"No data found for analysis: {str(e)}")
+            return {
+                "total_water_wasted_weekdays":      None,
+                "efficiency_percentage_weekdays":   None,
+                "total_water_consumed_weekdays":    None,
+                "total_water_wasted_weekends":      None,
+                "efficiency_percentage_weekends":   None,
+                "total_water_consumed_weekends":    None,
+                "time_series":                      []
+            }
 
-        return templates.TemplateResponse("analysis.html", {
-            "request": request,
-            "total_water_wasted_weekdays": analysis_results['weekday_wasted'],
-            "efficiency_percentage_weekdays": analysis_results['weekday_efficiency'], 
-            "total_water_consumed_weekdays": analysis_results['weekday_total'],
-            "total_water_wasted_weekends": analysis_results['weekend_wasted'],
-            "efficiency_percentage_weekends": analysis_results['weekend_efficiency'],
-            "total_water_consumed_weekends": analysis_results['weekend_total'],
-            "plot_url": plot_url,
-            "window_size": window_size,
-            "end_week": end_week,
-            "year": year,
-            "error_message": None,
-            "places": places,
-        })
-    except HTTPException as he:
-        raise he
+        # Construir serie temporal
+        combined = pd.concat([results['weekday_data'], results['weekend_data']])
+        df = combined.reset_index()
+        if not df.empty and 'timestamp' in df.columns:
+            df['timestamp'] = df['timestamp'].astype(str)
+        time_series = df[['timestamp', 'flow_rate', 'RollingMin']].to_dict(orient='records') if not df.empty else []
+
+        return {
+            "total_water_wasted_weekdays":      results['weekday_wasted'],
+            "efficiency_percentage_weekdays":   results['weekday_efficiency'],
+            "total_water_consumed_weekdays":    results['weekday_total'],
+            "total_water_wasted_weekends":      results['weekend_wasted'],
+            "efficiency_percentage_weekends":   results['weekend_efficiency'],
+            "total_water_consumed_weekends":    results['weekend_total'],
+            "time_series":                      time_series
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in view_analysis: {str(e)}", exc_info=True)
-        return templates.TemplateResponse("analysis.html", {
-            "request": request,
-            "error_message": f"An error occurred: {str(e)}",
-            "plot_url": None,
-            "window_size": window_size,
-            "end_week": end_week,
-            "year": year,
-            "places": [],
-        })
-
+        logger.error(f"Error in analysis_json: {str(e)}", exc_info=True)
+        # Si el error es por no encontrar datos, retorna time_series vacío y métricas en None
+        return {
+            "total_water_wasted_weekdays":      None,
+            "efficiency_percentage_weekdays":   None,
+            "total_water_consumed_weekdays":    None,
+            "total_water_wasted_weekends":      None,
+            "efficiency_percentage_weekends":   None,
+            "total_water_consumed_weekends":    None,
+            "time_series":                      []
+        }
 
 @app.get("/generate_weekly_pdf", status_code=200)
 async def generate_weekly_pdf(
