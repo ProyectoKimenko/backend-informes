@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.requests import Request
+from fastapi import Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
@@ -18,7 +19,7 @@ import tempfile
 from supabase import create_client
 import logging
 import sys
-
+import requests
 from src.analysis import analyze_data
 from src.scrape import fetch_page_info
 from src.report import Report
@@ -624,3 +625,67 @@ async def check_weeks(year: int):
     except Exception as e:
         logger.error(f"Error checking weeks: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/new_place", response_class=JSONResponse)
+async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
+    """Create a new place"""
+    logger.info(f"Creating new place with name: {name}, flow_reporter_id: {flow_reporter_id}")
+    
+    # Check Supabase credentials
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    if not supabase_url or not supabase_key:
+        raise HTTPException(status_code=500, detail="Supabase credentials not set.")
+
+    supabase = create_client(supabase_url, supabase_key)
+
+    # Create the new place
+    response = supabase.table("places").insert({"name": name, "flow_reporter_id": flow_reporter_id}).execute()
+    new_place = response.data[0] if response.data else None
+
+    return {"success": True, "place": new_place}
+
+
+@app.post("/scrape_place", response_class=JSONResponse)
+async def scrape_place(place_id: int = Body(...), start_date: str = Body(...), end_date: str = Body(...)):
+    """
+    Scrape data for a place between start_date and end_date.
+    Reject new requests if another scraping operation is in progress.
+    Dates must be provided in the YYYY-MM-DD format.
+    """
+    # Validate required parameters
+    print(f"place_id: {place_id}, start_date: {start_date}, end_date: {end_date}")
+    if place_id is None:
+        raise HTTPException(status_code=400, detail="place_id is required")
+    if start_date is None:
+        raise HTTPException(status_code=400, detail="start_date is required")
+    if end_date is None:
+        raise HTTPException(status_code=400, detail="end_date is required")
+    
+    logger.info(f"Scraping data for place {place_id} from {start_date} to {end_date}")
+    
+    # Check Supabase credentials
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    if not supabase_url or not supabase_key:
+        raise HTTPException(status_code=500, detail="Supabase credentials not set.")
+
+    supabase = create_client(supabase_url, supabase_key)
+
+    # Perform the scraping
+    try:
+        # Fire and forget - don't wait for response
+        requests.get(
+            "http://host.docker.internal:8001/scrape-devices",
+            params={
+                "place_id": place_id,
+                "start_date": start_date,
+                "end_date": end_date
+            },
+            headers={"Content-Type": "application/json"}
+        )
+        logger.info(f"Scraping request sent for place {place_id}")
+        return {"success": True, "message": "Scraping request initiated successfully"}
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to scrape data for place {place_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
