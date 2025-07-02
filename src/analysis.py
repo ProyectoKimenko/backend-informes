@@ -52,8 +52,8 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
     data['Timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
     data = data.set_index('Timestamp')  # Set Timestamp as the index
 
-    # Resample data to 1-minute intervals, forward fill missing values
-    data_resampled = data.resample('1T').mean().ffill()
+    # Resample data to 1-minute intervals, fill missing values with 0
+    data_resampled = data.resample('1T').mean().fillna(0)
     logger.info(f"Columns after resampling: {data_resampled.columns.tolist()}")
     
     # Separate weekday and weekend data
@@ -69,7 +69,7 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
         df['RollingMin'] = df[['RollingMin_f', 'RollingMin_b', 'RollingMin_c']].max(axis=1)
         # Ensure RollingMin never exceeds the actual flow_rate at that minute
         df['RollingMin'] = df.apply(lambda row: min(row['flow_rate'], row['RollingMin']) if pd.notnull(row['RollingMin']) else row['flow_rate'], axis=1)
-        df['RollingMin'] = df['RollingMin'].ffill()
+        df['RollingMin'] = df['RollingMin'].fillna(0)
     
     def safe_int(value):
         try:

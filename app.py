@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.requests import Request
@@ -110,36 +110,67 @@ def create_plot(data, title_prefix, date_str):
             raise ValueError(f"Missing required column '{col}' in data")
 
     logger.info(f"Creating plot for {title_prefix} - {date_str}")
+    
+    # Verificar si hay datos válidos
+    has_data = len(data) > 0 and data['flow_rate'].sum() > 0
+    
     plt.figure(figsize=(12, 6))
     plt.style.use('default')
     
-    # Create masks for valid data
-    flow_mask = ~np.isnan(data['flow_rate'])
-    min_mask = ~np.isnan(data['RollingMin'])
+    if not has_data:
+        # Crear un gráfico especial para cuando no hay datos
+        ax = plt.gca()
+        
+        # Dibujar una línea base en cero
+        ax.axhline(y=0, color='lightgray', linestyle='-', linewidth=2)
+        
+        # Texto informativo
+        ax.text(0.5, 0.5, 'Sin consumo registrado en este período\n(100% de eficiencia)', 
+                horizontalalignment='center', verticalalignment='center',
+                transform=ax.transAxes, fontsize=16, color='gray',
+                bbox=dict(boxstyle="round,pad=0.5", facecolor="white", edgecolor="gray", alpha=0.8))
+        
+        # Configurar los ejes
+        ax.set_ylim(-0.5, 5)
+        ax.set_xlim(0, 1)
+        ax.set_xticks([])
+        
+    else:
+        # Create masks for valid data
+        flow_mask = ~np.isnan(data['flow_rate'])
+        min_mask = ~np.isnan(data['RollingMin'])
 
-    logger.debug(f"Valid flow data points: {np.sum(flow_mask)}")
-    logger.debug(f"Valid min data points: {np.sum(min_mask)}")
+        logger.debug(f"Valid flow data points: {np.sum(flow_mask)}")
+        logger.debug(f"Valid min data points: {np.sum(min_mask)}")
 
-    # Plot flow rate segments
-    flow_segments = split_at_gaps(data.index, data['flow_rate'], flow_mask)
-    for x, y in flow_segments:
-        plt.plot(x, y, color='#1f77b4', linewidth=2, 
-                 label='Flujo total' if x is flow_segments[0][0] else "")
+        # Plot flow rate segments
+        flow_segments = split_at_gaps(data.index, data['flow_rate'], flow_mask)
+        for i, (x, y) in enumerate(flow_segments):
+            if len(x) > 0:
+                plt.plot(x, y, color='#1f77b4', linewidth=2, 
+                         label='Flujo total' if i == 0 else "")
 
-    min_segments = split_at_gaps(data.index, data['RollingMin'], min_mask)
-    for x, y in min_segments:
-        if len(x) > 1:  # Ensure more than one point
-            plt.plot(x, y, color='#d62728', linewidth=2, 
-                     label='Límite de desperdicio' if x is min_segments[0][0] else "")
-            plt.fill_between(x, 0, y, color='#d62728', alpha=0.3,
-                             label='Flujo desperdiciado' if x is min_segments[0][0] else "")
+        # Plot rolling min segments
+        min_segments = split_at_gaps(data.index, data['RollingMin'], min_mask)
+        for i, (x, y) in enumerate(min_segments):
+            if len(x) > 1:
+                plt.plot(x, y, color='#d62728', linewidth=2, 
+                         label='Límite de desperdicio' if i == 0 else "")
+                plt.fill_between(x, 0, y, color='#d62728', alpha=0.3,
+                                 label='Flujo desperdiciado' if i == 0 else "")
+        
+        # Ajustar ylim para evitar problemas con valores muy pequeños
+        max_val = max(data['flow_rate'].max(), 1)
+        plt.ylim(0, max_val * 1.1)
+        
+        # Solo mostrar leyenda si hay datos
+        plt.legend(frameon=True, fancybox=True, shadow=True, fontsize=10)
 
     # Configure plot formatting
     plt.title(f'{title_prefix} - {date_str}', pad=20, fontsize=14)
     plt.xlabel('Tiempo', fontsize=12)
     plt.ylabel('Flujo (litros)', fontsize=12)
     plt.grid(True, alpha=0.3)
-    plt.legend(frameon=True, fancybox=True, shadow=True, fontsize=10)
     plt.tight_layout()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
@@ -172,6 +203,9 @@ def create_weekly_trend_plot(weeks_data):
     weekend_losses = [week['weekend_wasted'] for week in weeks_data]
     colors = [week['color'] for week in weeks_data]
 
+    # Verificar si todos los consumos son cero
+    all_zero_consumption = all(c == 0 for c in weekday_consumptions + weekend_consumptions)
+
     logger.debug(f"Weekday consumptions: {weekday_consumptions}")
     logger.debug(f"Weekend consumptions: {weekend_consumptions}")
     logger.debug(f"Weekday efficiencies: {weekday_efficiencies}")
@@ -184,16 +218,36 @@ def create_weekly_trend_plot(weeks_data):
     x = np.arange(len(weeks))
 
     # Consumption and Losses Plot
-    ax1.bar(x - width / 2, [c - w for c, w in zip(weekday_consumptions, weekday_losses)], width, 
-            label='Consumo Laboral', color=colors)
-    ax1.bar(x + width / 2, [c - w for c, w in zip(weekend_consumptions, weekend_losses)], width, 
-            label='Consumo Fin de Semana', color=[adjust_color_brightness(c, 0.7) for c in colors])
-    ax1.bar(x - width / 2, weekday_losses, width, 
-            bottom=[c - w for c, w in zip(weekday_consumptions, weekday_losses)],
-            label='Pérdidas Laborales', color=[adjust_color_brightness(c, 0.5) for c in colors])
-    ax1.bar(x + width / 2, weekend_losses, width, 
-            bottom=[c - w for c, w in zip(weekend_consumptions, weekend_losses)],
-            label='Pérdidas Fin de Semana', color=[adjust_color_brightness(c, 0.3) for c in colors])
+    if all_zero_consumption:
+        # Mostrar mensaje cuando no hay consumo
+        ax1.text(0.5, 0.5, 'Sin consumo registrado en las semanas analizadas', 
+                horizontalalignment='center', verticalalignment='center',
+                transform=ax1.transAxes, fontsize=16, color='gray')
+        ax1.set_ylim(0, 1)
+    else:
+        # Calcular valores para las barras, asegurando que no sean negativos
+        weekday_net_consumption = [max(0, c - w) for c, w in zip(weekday_consumptions, weekday_losses)]
+        weekend_net_consumption = [max(0, c - w) for c, w in zip(weekend_consumptions, weekend_losses)]
+        
+        ax1.bar(x - width / 2, weekday_net_consumption, width, 
+                label='Consumo Laboral', color=colors)
+        ax1.bar(x + width / 2, weekend_net_consumption, width, 
+                label='Consumo Fin de Semana', color=[adjust_color_brightness(c, 0.7) for c in colors])
+        
+        # Solo mostrar pérdidas si hay consumo
+        if any(loss > 0 for loss in weekday_losses):
+            ax1.bar(x - width / 2, weekday_losses, width, 
+                    bottom=weekday_net_consumption,
+                    label='Pérdidas Laborales', color=[adjust_color_brightness(c, 0.5) for c in colors])
+        
+        if any(loss > 0 for loss in weekend_losses):
+            ax1.bar(x + width / 2, weekend_losses, width, 
+                    bottom=weekend_net_consumption,
+                    label='Pérdidas Fin de Semana', color=[adjust_color_brightness(c, 0.3) for c in colors])
+        
+        # Ajustar límite Y para incluir un pequeño margen
+        max_y = max(max(weekday_consumptions), max(weekend_consumptions), 1) * 1.1
+        ax1.set_ylim(0, max_y)
 
     ax1.set_ylabel('Litros', fontsize=14)
     ax1.set_title('Consumo Total y Pérdidas por Semana', fontsize=16, pad=20)
@@ -219,7 +273,7 @@ def create_weekly_trend_plot(weeks_data):
     ax2.set_ylabel('Porcentaje de Eficiencia', fontsize=14)
     ax2.set_title('Eficiencia por Semana', fontsize=16, pad=20)
     ax2.grid(True, linestyle='--', alpha=0.7)
-    ax2.set_ylim(0, 100)
+    ax2.set_ylim(0, 105)  # Ajustado para incluir 100%
     ax2.tick_params(axis='both', labelsize=12)
     ax2.legend(fontsize=12, bbox_to_anchor=(1.05, 1), loc='upper left')
 
@@ -296,6 +350,23 @@ def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List
         logger.info(f"Week {current_week} of {iso_calendar.year}: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}")
 
     return week_ranges
+
+def make_scraping_request(place_id: int, start_date: str, end_date: str):
+    """Background task to make the scraping request"""
+    try:
+        requests.get(
+            "http://172.17.0.1:8001/scrape-devices",
+            params={
+                "place_id": place_id,
+                "start_date": start_date,
+                "end_date": end_date
+            },
+            headers={"Content-Type": "application/json"},
+            timeout=180
+        )
+        logger.info(f"Scraping request completed for place {place_id}")
+    except Exception as e:
+        logger.error(f"Background scraping request failed for place {place_id}: {str(e)}")
 
 
 # Initialize Supabase client
@@ -647,7 +718,12 @@ async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
 
 
 @app.post("/scrape_place", response_class=JSONResponse)
-async def scrape_place(place_id: int = Body(...), start_date: str = Body(...), end_date: str = Body(...)):
+async def scrape_place(
+    background_tasks: BackgroundTasks,
+    place_id: int = Body(...), 
+    start_date: str = Body(...), 
+    end_date: str = Body(...)
+):
     """
     Scrape data for a place between start_date and end_date.
     Reject new requests if another scraping operation is in progress.
@@ -672,20 +748,8 @@ async def scrape_place(place_id: int = Body(...), start_date: str = Body(...), e
 
     supabase = create_client(supabase_url, supabase_key)
 
-    # Perform the scraping
-    try:
-        # Fire and forget - don't wait for response
-        requests.get(
-            "http://host.docker.internal:8001/scrape-devices",
-            params={
-                "place_id": place_id,
-                "start_date": start_date,
-                "end_date": end_date
-            },
-            headers={"Content-Type": "application/json"}
-        )
-        logger.info(f"Scraping request sent for place {place_id}")
-        return {"success": True, "message": "Scraping request initiated successfully"}
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to scrape data for place {place_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+    # Add the scraping request as a background task
+    background_tasks.add_task(make_scraping_request, place_id, start_date, end_date)
+    
+    logger.info(f"Scraping request queued for place {place_id}")
+    return {"success": True, "message": "Scraping request initiated successfully"}

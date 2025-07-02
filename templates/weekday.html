@@ -5,18 +5,18 @@
     {% set week_number = section.title.split(' ')[1]|int %}
     {% set current_color = '#1fa9c9' if week_number % 2 == 1 else '#e67e22' %}
     
-    <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px;">
-        <div class="metric-card">
+    <div style="display: flex; justify-content: space-between; gap: 15px; margin: 30px 0;">
+        <div class="metric-card" style="flex: 1; min-width: 0;">
             <h3 style="font-size: 0.9rem;">Consumo Total</h3>
             <div class="metric-value" style="color: {{ current_color }};">{{ section.data.total_consumption }}</div>
             <p style="font-size: 0.8rem;">litros</p>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" style="flex: 1; min-width: 0;">
             <h3 style="font-size: 0.9rem;">Eficiencia</h3>
             <div class="metric-value" style="color: {{ current_color }};">{{ section.data.efficiency }}%</div>
             <p style="font-size: 0.8rem;">de aprovechamiento</p>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" style="flex: 1; min-width: 0;">
             <h3 style="font-size: 0.9rem;">Pérdidas</h3>
             <div class="metric-value" style="color: {{ current_color }};">{{ section.data.wasted }}</div>
             <p style="font-size: 0.8rem;">litros</p>
