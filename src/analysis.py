@@ -11,7 +11,7 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
     # Initialize Supabase client
     supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
     
-    # Build the query on the new "measurements" table
+    # Build the query on the "measurements" table
     query = supabase.table("measurements").select("*")
     if place_id is not None:
         query = query.eq("place_id", place_id)
@@ -53,23 +53,94 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
     data = data.set_index('Timestamp')  # Set Timestamp as the index
 
     # Resample data to 1-minute intervals, fill missing values with 0
-    data_resampled = data.resample('1T').mean().fillna(0)
+    data_resampled = data.resample('min').mean().fillna(0)  # Using 'min' to avoid FutureWarning
     logger.info(f"Columns after resampling: {data_resampled.columns.tolist()}")
     
     # Separate weekday and weekend data
     weekday_data = data_resampled[data_resampled.index.weekday < 5].copy()
     weekend_data = data_resampled[data_resampled.index.weekday >= 5].copy()
     
-    # Add RollingMin calculations for both weekday and weekend data
-    for df in [weekday_data, weekend_data]:
-        # Compute rolling minimums across different windows (forward, backward, centered)
-        df['RollingMin_b'] = df['flow_rate'].shift(-window_size).rolling(window=window_size, min_periods=1).min()
-        df['RollingMin_f'] = df['flow_rate'].rolling(window=window_size, min_periods=1).min()
-        df['RollingMin_c'] = df['flow_rate'].rolling(window=window_size, min_periods=1, center=True).min()
-        df['RollingMin'] = df[['RollingMin_f', 'RollingMin_b', 'RollingMin_c']].max(axis=1)
-        # Ensure RollingMin never exceeds the actual flow_rate at that minute
-        df['RollingMin'] = df.apply(lambda row: min(row['flow_rate'], row['RollingMin']) if pd.notnull(row['RollingMin']) else row['flow_rate'], axis=1)
-        df['RollingMin'] = df['RollingMin'].fillna(0)
+    # Function to calculate RollingMin (leaks) based on runs of flow >0 longer than window_size, with gap tolerance
+    def calculate_leaks(df, window_size):
+        if df.empty:
+            df['RollingMin'] = pd.Series(dtype=float)
+            return df
+        # Identify continuous runs of positive flow
+        df['is_positive'] = df['flow_rate'] > 0
+        df['group_id'] = (df['is_positive'] != df['is_positive'].shift()).cumsum()
+        groups = df.groupby('group_id')
+        
+        # Collect positive groups
+        positive_groups = []
+        for g_id, group in groups:
+            if group['is_positive'].iloc[0]:
+                positive_groups.append(group)
+        
+        if not positive_groups:
+            df['RollingMin'] = 0.0
+            df = df.drop(columns=['is_positive', 'group_id'], errors='ignore')
+            return df
+        
+        # Merge positive groups if gap <= tolerance
+        tolerance = 0  # minutes for small gaps
+        merged_groups = []
+        current_merged = positive_groups[0]
+        for next_group in positive_groups[1:]:
+            # Calculate gap in minutes
+            gap_delta = next_group.index.min() - current_merged.index.max()
+            gap_min = int((gap_delta.total_seconds() / 60) - 1)  # -1 since consecutive have delta=1min, gap=0
+            if gap_min <= tolerance:
+                current_merged = pd.concat([current_merged, next_group])
+            else:
+                merged_groups.append(current_merged)
+                current_merged = next_group
+        merged_groups.append(current_merged)
+        
+        df['RollingMin'] = 0.0  # Initialize as 0 (no leak unless in a long run)
+        
+        # First pass: identify all runs that exceed window_size
+        for merged_group in merged_groups:
+            run_length = len(merged_group)
+            if run_length > window_size:
+                # For each long run, check for sub-periods with higher constant consumption
+                # Use a sliding window approach
+                for start_idx in range(len(merged_group) - window_size):
+                    end_idx = start_idx + window_size + 1
+                    window_data = merged_group.iloc[start_idx:end_idx]
+                    
+                    # Calculate the minimum flow in this window
+                    window_min = window_data['flow_rate'].min()
+                    
+                    # Apply this minimum to the entire window
+                    for idx in window_data.index:
+                        # Keep the maximum value if already set (from a previous window)
+                        current_val = df.loc[idx, 'RollingMin']
+                        df.loc[idx, 'RollingMin'] = max(current_val, window_min)
+                
+                # Also check longer sub-periods within the run
+                # Check windows of size 2*window_size, 3*window_size, etc.
+                for multiplier in range(2, 4):  # Check up to 3x window_size
+                    extended_window = window_size * multiplier
+                    if extended_window < len(merged_group):
+                        for start_idx in range(len(merged_group) - extended_window):
+                            end_idx = start_idx + extended_window + 1
+                            window_data = merged_group.iloc[start_idx:end_idx]
+                            
+                            # For longer windows, use a more robust metric (percentile 10)
+                            window_leak = window_data['flow_rate'].quantile(0.001)
+                            
+                            # Apply to the entire window
+                            for idx in window_data.index:
+                                current_val = df.loc[idx, 'RollingMin']
+                                df.loc[idx, 'RollingMin'] = max(current_val, window_leak)
+
+        # Drop auxiliary columns
+        df = df.drop(columns=['is_positive', 'group_id'], errors='ignore')
+        return df
+    
+    # Apply to weekday and weekend data
+    weekday_data = calculate_leaks(weekday_data, window_size)
+    weekend_data = calculate_leaks(weekend_data, window_size)
     
     def safe_int(value):
         try:
