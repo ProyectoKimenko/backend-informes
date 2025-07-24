@@ -229,9 +229,9 @@
 
             const numWeeks = endWeek - startWeek + 1;
 
-            // Check the 4-week limit
-            if (numWeeks > 4) {
-                infoEl.innerHTML = `<p class="text-red-500 text-sm">No se pueden seleccionar más de 4 semanas. Ajuste la Semana de Inicio o Fin.</p>`;
+            // Check the 5-week limit
+            if (numWeeks > 5) {
+                infoEl.innerHTML = `<p class="text-red-500 text-sm">No se pueden seleccionar más de 5 semanas. Ajuste la Semana de Inicio o Fin.</p>`;
                 applyButton.disabled = true;
                 pdfButton.disabled = true;
                 return;
@@ -247,7 +247,7 @@
 
             infoEl.innerHTML = `
                 <p class="text-sm"><strong>Período seleccionado:</strong> Desde la Semana ${startWeek} (${startStr}) hasta la Semana ${endWeek} (${endStr})</p>
-                <p class="text-xs text-gray-500 italic">El análisis abarcará ${numWeeks} semana(s) completas (máx. 4).</p>
+                <p class="text-xs text-gray-500 italic">El análisis abarcará ${numWeeks} semana(s) completas (máx. 5).</p>
             `;
             applyButton.disabled = false;
             pdfButton.disabled = false;

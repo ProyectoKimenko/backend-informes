@@ -327,8 +327,8 @@ async def analysis_json(
         if end_week < start_week:
             raise HTTPException(status_code=400, detail="end_week debe ser >= start_week")
         num_weeks = end_week - start_week + 1
-        if num_weeks > 4:
-            raise HTTPException(status_code=400, detail="No se pueden seleccionar más de 4 semanas")
+        if num_weeks > 5:
+            raise HTTPException(status_code=400, detail="No se pueden seleccionar más de 5 semanas")
 
         week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
         start_epoch = int(week_ranges[0][0].timestamp() * 1000)
@@ -402,8 +402,8 @@ async def generate_weekly_pdf(
             raise HTTPException(status_code=400, detail=f"end_week must be >= start_week")
 
         num_weeks = end_week - start_week + 1
-        if num_weeks > 4:
-            raise HTTPException(status_code=400, detail=f"Cannot select more than 4 weeks")
+        if num_weeks > 5:
+            raise HTTPException(status_code=400, detail=f"Cannot select more than 5 weeks")
         
         week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
         if not week_ranges:
