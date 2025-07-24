@@ -52,3 +52,14 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Project specific cache and temporary files
+matplotlib_cache/
+*.log
+*.pdf
+.DS_Store
+.matplotlib_cache
+
+# Temporary files
+temp/
+tmp/

@@ -5,6 +5,5 @@ matplotlib
 reportlab
 weasyprint
 jinja2
-selenium
 supabase
 requests
