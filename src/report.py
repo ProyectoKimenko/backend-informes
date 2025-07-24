@@ -23,7 +23,7 @@ class Report:
         # Optimize background image before encoding
         with Image.open('static/mountain.jpg') as img:
             # Resize image if too large (e.g., to max 1500px width)
-            max_width = 1500
+            max_width = 500
             if img.width > max_width:
                 ratio = max_width / img.width
                 new_size = (max_width, int(img.height * ratio))
@@ -57,6 +57,7 @@ class Report:
             HTML(string=rendered_html).write_pdf(
                 pdf_file,
                 optimize_images=True,
-                jpeg_quality=70
+                jpeg_quality=50,
+                compress=True
             )
         return pdf_file

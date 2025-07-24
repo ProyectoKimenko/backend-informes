@@ -23,6 +23,7 @@ import requests
 from src.analysis import analyze_data
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
+import time
 
 # Simplified logging setup
 logging.basicConfig(
@@ -137,7 +138,7 @@ def create_plot(data, title_prefix, date_str):
     plt.tight_layout()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
-        plt.savefig(temp_file.name, dpi=300, bbox_inches='tight')
+        plt.savefig(temp_file.name, dpi=50, bbox_inches='tight')
         plt.close()
     return temp_file.name
 
@@ -226,7 +227,7 @@ def create_weekly_trend_plot(weeks_data):
     plt.tight_layout(rect=[0, 0, 0.85, 0.95], h_pad=0.8)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
-        plt.savefig(temp_file.name, bbox_inches='tight', dpi=300)
+        plt.savefig(temp_file.name, bbox_inches='tight', dpi=50)
         plt.close()
     return temp_file.name
 
@@ -390,6 +391,7 @@ async def generate_weekly_pdf(
     window_size: int = 60,
     place_id: int = None
 ):
+    time_start = time.time()
     try:
         response = supabase.table("places").select("*").execute()
         places = response.data if response.data else []
@@ -517,7 +519,9 @@ async def generate_weekly_pdf(
         
         pdf_file = report.render()
         logger.info(f"PDF report generated successfully")
-        
+
+        time_end = time.time()
+        print(f"Time taken: {time_end - time_start} seconds")
         return FileResponse(
             pdf_file,
             media_type='application/pdf',
