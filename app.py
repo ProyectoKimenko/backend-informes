@@ -20,7 +20,7 @@ from supabase import create_client
 import logging
 import sys
 import requests
-from src.analysis import analyze_data
+from src.analysis import analyze_data, analyze_data_from_df
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 import time
@@ -411,6 +411,18 @@ async def generate_weekly_pdf(
         if not week_ranges:
             raise HTTPException(status_code=400, detail=f"No valid weeks found")
         
+        # Single query to get all data for all weeks
+        total_start_epoch = int(week_ranges[0][0].timestamp() * 1000)
+        total_end_epoch = int(week_ranges[-1][1].timestamp() * 1000)
+        
+        query = supabase.table("measurements").select("*")
+        if place_id is not None:
+            query = query.eq("place_id", place_id)
+        query = query.gte("timestamp", total_start_epoch).lte("timestamp", total_end_epoch)
+        
+        response = query.execute()
+        all_data = pd.DataFrame(response.data)
+        
         report = Report(
             title=f"Informe de Consumo de Agua - {week_ranges[0][0].strftime('%d/%m/%Y')} al {week_ranges[-1][1].strftime('%d/%m/%Y')}",
             place_name=place_name
@@ -425,11 +437,11 @@ async def generate_weekly_pdf(
             start_epoch = int(week_start.timestamp() * 1000)
             end_epoch = int(week_end.timestamp() * 1000)
             
-            analysis_results = analyze_data(
+            analysis_results = analyze_data_from_df(
+                data_df=all_data,
                 window_size=window_size,
                 start_epoch=start_epoch,
-                end_epoch=end_epoch,
-                place_id=place_id
+                end_epoch=end_epoch
             )
 
             required_keys = [

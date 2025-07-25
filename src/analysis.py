@@ -6,21 +6,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int = None, place_id: int = None):
-    supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
-    
-    query = supabase.table("measurements").select("*")
-    if place_id is not None:
-        query = query.eq("place_id", place_id)
-    if start_epoch is not None:
-        query = query.gte("timestamp", start_epoch)
-    if end_epoch is not None:
-        query = query.lte("timestamp", end_epoch)
-    
-    response = query.execute()
-    data = pd.DataFrame(response.data)
-    
-    if data.empty:
+def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epoch: int = None, end_epoch: int = None):
+    """Analyze data from an already loaded DataFrame without making database queries"""
+    if data_df.empty:
         empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
         return {
             'weekday_data': empty_df,
@@ -35,9 +23,31 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
             'weekend_efficiency': 0
         }
     
-    data['Timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
-    data = data.set_index('Timestamp')
-    data_resampled = data.resample('min').mean().fillna(0)
+    # Filter data by time range if specified
+    filtered_data = data_df.copy()
+    if start_epoch is not None:
+        filtered_data = filtered_data[filtered_data['timestamp'] >= start_epoch]
+    if end_epoch is not None:
+        filtered_data = filtered_data[filtered_data['timestamp'] <= end_epoch]
+    
+    if filtered_data.empty:
+        empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
+        return {
+            'weekday_data': empty_df,
+            'weekend_data': empty_df,
+            'weekday_peak': {'day': None, 'consumption': 0},
+            'weekend_peak': {'day': None, 'consumption': 0},
+            'weekday_total': 0,
+            'weekend_total': 0,
+            'weekday_wasted': 0,
+            'weekend_wasted': 0,
+            'weekday_efficiency': 0,
+            'weekend_efficiency': 0
+        }
+    
+    filtered_data['Timestamp'] = pd.to_datetime(filtered_data['timestamp'], unit='ms')
+    filtered_data = filtered_data.set_index('Timestamp')
+    data_resampled = filtered_data.resample('min').mean().fillna(0)
     
     weekday_data = data_resampled[data_resampled.index.weekday < 5].copy()
     weekend_data = data_resampled[data_resampled.index.weekday >= 5].copy()
@@ -162,3 +172,19 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
         'weekday_efficiency': efficiency_percentage_weekdays,
         'weekend_efficiency': efficiency_percentage_weekends
     }
+
+def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int = None, place_id: int = None):
+    supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
+    
+    query = supabase.table("measurements").select("*")
+    if place_id is not None:
+        query = query.eq("place_id", place_id)
+    if start_epoch is not None:
+        query = query.gte("timestamp", start_epoch)
+    if end_epoch is not None:
+        query = query.lte("timestamp", end_epoch)
+    
+    response = query.execute()
+    data = pd.DataFrame(response.data)
+    
+    return analyze_data_from_df(data, window_size, start_epoch, end_epoch)
