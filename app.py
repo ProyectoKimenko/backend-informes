@@ -8,10 +8,11 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 from typing import List, Dict, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import calendar
 import colorsys
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 import os
 import pandas as pd
@@ -87,6 +88,20 @@ def split_at_gaps(index, values, mask):
 
     return segments
 
+def get_local_timezone_offset():
+    """Get the local timezone offset from UTC as a string (e.g., 'UTC-4', 'UTC+2')"""
+    local_now = datetime.now()
+    utc_now = datetime.utcnow()
+    
+    # Calculate offset in hours
+    offset_seconds = (local_now - utc_now).total_seconds()
+    offset_hours = int(offset_seconds / 3600)
+    
+    if offset_hours >= 0:
+        return f"UTC+{offset_hours}"
+    else:
+        return f"UTC{offset_hours}"  # offset_hours already has the minus sign
+
 def create_plot(data, title_prefix, date_str):
     required_columns = ['flow_rate', 'RollingMin']
     for col in required_columns:
@@ -96,11 +111,13 @@ def create_plot(data, title_prefix, date_str):
 
     has_data = len(data) > 0 and data['flow_rate'].sum() > 0
     
-    plt.figure(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(14, 8))
     plt.style.use('default')
     
+    # Get local timezone info
+    tz_offset = get_local_timezone_offset()
+    
     if not has_data:
-        ax = plt.gca()
         ax.axhline(y=0, color='lightgray', linestyle='-', linewidth=2)
         ax.text(0.5, 0.5, 'Sin consumo registrado en este período\n(100% de eficiencia)', 
                 horizontalalignment='center', verticalalignment='center',
@@ -116,29 +133,46 @@ def create_plot(data, title_prefix, date_str):
         flow_segments = split_at_gaps(data.index, data['flow_rate'], flow_mask)
         for i, (x, y) in enumerate(flow_segments):
             if len(x) > 0:
-                plt.plot(x, y, color='#1f77b4', linewidth=2, 
-                         label='Flujo total' if i == 0 else "")
+                ax.plot(x, y, color='#1f77b4', linewidth=2, 
+                       label='Flujo total' if i == 0 else "")
 
         min_segments = split_at_gaps(data.index, data['RollingMin'], min_mask)
         for i, (x, y) in enumerate(min_segments):
             if len(x) > 1:
-                plt.plot(x, y, color='#d62728', linewidth=2, 
-                         label='Límite de desperdicio' if i == 0 else "")
-                plt.fill_between(x, 0, y, color='#d62728', alpha=0.3,
-                                 label='Flujo desperdiciado' if i == 0 else "")
+                ax.plot(x, y, color='#d62728', linewidth=2, 
+                       label='Límite de pérdida' if i == 0 else "")
+                ax.fill_between(x, 0, y, color='#d62728', alpha=0.3,
+                               label='Pérdida' if i == 0 else "")
         
         max_val = max(data['flow_rate'].max(), 1)
-        plt.ylim(0, max_val * 1.1)
-        plt.legend(frameon=True, fancybox=True, shadow=True, fontsize=10)
+        ax.set_ylim(0, max_val * 1.1)
+        
+        # Improved time axis formatting
+        if len(data) > 0:
+            # Format x-axis with dates and times
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
+            ax.xaxis.set_minor_locator(mdates.HourLocator(interval=2))
+            
+            # Rotate labels for better readability
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            # Add grid for better readability
+            ax.grid(True, alpha=0.3, which='major')
+            ax.grid(True, alpha=0.1, which='minor')
+        
+        ax.legend(frameon=True, fancybox=True, shadow=True, fontsize=10)
 
-    plt.title(f'{title_prefix} - {date_str}', pad=20, fontsize=14)
-    plt.xlabel('Tiempo', fontsize=12)
-    plt.ylabel('Flujo (litros)', fontsize=12)
-    plt.grid(True, alpha=0.3)
+    # Enhanced title and labels with local timezone information
+    ax.set_title(f'{title_prefix} - {date_str}\n(Hora {tz_offset})', pad=20, fontsize=14, weight='bold')
+    ax.set_xlabel(f'Fecha y Hora ({tz_offset})', fontsize=12, weight='bold')
+    ax.set_ylabel('Flujo (litros/min)', fontsize=12, weight='bold')
+    
+    # Improve layout
     plt.tight_layout()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
-        plt.savefig(temp_file.name, dpi=50, bbox_inches='tight')
+        plt.savefig(temp_file.name, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close()
     return temp_file.name
 
@@ -163,9 +197,13 @@ def create_weekly_trend_plot(weeks_data):
     colors = [week['color'] for week in weeks_data]
 
     all_zero_consumption = all(c == 0 for c in weekday_consumptions + weekend_consumptions)
+    
+    # Get local timezone info
+    tz_offset = get_local_timezone_offset()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
-    fig.suptitle('Tendencias Semanales de Consumo de Agua', fontsize=20, y=0.95)
+    fig.suptitle(f'Tendencias Semanales de Consumo de Agua\n(Todos los datos en hora {tz_offset})', 
+                 fontsize=20, y=0.95, weight='bold')
 
     width = 0.35
     x = np.arange(len(weeks))
@@ -197,8 +235,8 @@ def create_weekly_trend_plot(weeks_data):
         max_y = max(max(weekday_consumptions), max(weekend_consumptions), 1) * 1.1
         ax1.set_ylim(0, max_y)
 
-    ax1.set_ylabel('Litros', fontsize=14)
-    ax1.set_title('Consumo Total y Pérdidas por Semana', fontsize=16, pad=20)
+    ax1.set_ylabel('Litros', fontsize=14, weight='bold')
+    ax1.set_title('Consumo Total y Pérdidas por Semana', fontsize=16, pad=20, weight='bold')
     ax1.set_xticks(x)
     ax1.set_xticklabels(weeks, fontsize=12)
     ax1.tick_params(axis='y', labelsize=12)
@@ -217,8 +255,8 @@ def create_weekly_trend_plot(weeks_data):
                      textcoords="offset points", xytext=(0, -20),
                      ha='center', fontsize=11, weight='bold')
 
-    ax2.set_ylabel('Porcentaje de Eficiencia', fontsize=14)
-    ax2.set_title('Eficiencia por Semana', fontsize=16, pad=20)
+    ax2.set_ylabel('Porcentaje de Eficiencia', fontsize=14, weight='bold')
+    ax2.set_title('Eficiencia por Semana', fontsize=16, pad=20, weight='bold')
     ax2.grid(True, linestyle='--', alpha=0.7)
     ax2.set_ylim(0, 105)
     ax2.tick_params(axis='both', labelsize=12)
@@ -227,33 +265,47 @@ def create_weekly_trend_plot(weeks_data):
     plt.tight_layout(rect=[0, 0, 0.85, 0.95], h_pad=0.8)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
-        plt.savefig(temp_file.name, bbox_inches='tight', dpi=50)
+        plt.savefig(temp_file.name, bbox_inches='tight', dpi=100, facecolor='white')
         plt.close()
     return temp_file.name
 
 def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List[Tuple[datetime, datetime]]:
-    """Get start and end dates for specified week number(s)."""
+    """Get start and end dates for specified week number(s) in UTC, starting at 00:00."""
     week_ranges = []
     if num_weeks < 1:
         raise ValueError("num_weeks must be at least 1")
 
     if week == 1:
-        jan_first = datetime(year, 1, 1)
+        # Use UTC timezone explicitly and ensure we start at 00:00
+        jan_first = datetime(year, 1, 1, tzinfo=timezone.utc)
         days_to_monday = (jan_first.weekday()) % 7
         week_start = jan_first - timedelta(days=days_to_monday)
         
+        # Ensure week_start is at 00:00:00
+        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        
         if week_start.year < year and (jan_first - week_start).days > 3:
-            week_start = jan_first
+            week_start = jan_first.replace(hour=0, minute=0, second=0, microsecond=0)
             
         week_end = week_start + timedelta(days=6)
-        week_end = week_end.replace(hour=23, minute=59, second=59)
+        week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        # Debug logging
+        logger.info(f"Week 1 range: {week_start} to {week_end}")
+        logger.info(f"Week 1 timestamps: {int(week_start.timestamp() * 1000)} to {int(week_end.timestamp() * 1000)}")
+        
         week_ranges.append((week_start, week_end))
         
         for i in range(1, num_weeks):
-            next_week_start = week_end + timedelta(days=1)
-            next_week_start = next_week_start.replace(hour=0, minute=0, second=0)
+            next_week_start = week_end + timedelta(microseconds=1)
+            next_week_start = next_week_start.replace(hour=0, minute=0, second=0, microsecond=0)
             next_week_end = next_week_start + timedelta(days=6)
-            next_week_end = next_week_end.replace(hour=23, minute=59, second=59)
+            next_week_end = next_week_end.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
+            # Debug logging
+            logger.info(f"Week {i+1} range: {next_week_start} to {next_week_end}")
+            logger.info(f"Week {i+1} timestamps: {int(next_week_start.timestamp() * 1000)} to {int(next_week_end.timestamp() * 1000)}")
+            
             week_ranges.append((next_week_start, next_week_end))
             week_end = next_week_end
             
@@ -265,12 +317,19 @@ def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List
             raise ValueError(f"Requested out-of-range week number: {current_week}")
 
         try:
-            iso_calendar = datetime.fromisocalendar(year, current_week, 1)
+            # Create datetime with UTC timezone starting at 00:00
+            week_start = datetime.fromisocalendar(year, current_week, 1)
+            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
         except ValueError:
             raise ValueError(f"No valid week {current_week} found in year {year}.")
 
-        week_start = datetime.fromisocalendar(iso_calendar.year, current_week, 1)
-        week_end = datetime.fromisocalendar(iso_calendar.year, current_week, 7).replace(hour=23, minute=59, second=59)
+        week_end = datetime.fromisocalendar(year, current_week, 7)
+        week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+        
+        # Debug logging
+        logger.info(f"Week {current_week} range: {week_start} to {week_end}")
+        logger.info(f"Week {current_week} timestamps: {int(week_start.timestamp() * 1000)} to {int(week_end.timestamp() * 1000)}")
+        
         week_ranges.append((week_start, week_end))
 
     return week_ranges
@@ -283,7 +342,8 @@ def make_scraping_request(place_id: int, start_date: str, end_date: str):
             params={
                 "place_id": place_id,
                 "start_date": start_date,
-                "end_date": end_date
+                "end_date": end_date,
+                "force": True
             },
             headers={"Content-Type": "application/json"},
             timeout=180
@@ -334,6 +394,10 @@ async def analysis_json(
         week_ranges = get_dates_from_week_number(year, start_week, num_weeks)
         start_epoch = int(week_ranges[0][0].timestamp() * 1000)
         end_epoch   = int(week_ranges[-1][1].timestamp() * 1000)
+        
+        # Debug logging
+        logger.info(f"Analysis query range: {start_epoch} to {end_epoch}")
+        logger.info(f"Analysis date range: {week_ranges[0][0]} to {week_ranges[-1][1]}")
 
         try:
             results = analyze_data(
@@ -354,7 +418,12 @@ async def analysis_json(
                 "time_series":                      []
             }
 
+        # Debug logging for data range
         combined = pd.concat([results['weekday_data'], results['weekend_data']])
+        if not combined.empty:
+            logger.info(f"Data range in results: {combined.index.min()} to {combined.index.max()}")
+            logger.info(f"First few timestamps: {combined.head().index.tolist()}")
+        
         df = combined.reset_index()
         if not df.empty and 'timestamp' in df.columns:
             df['timestamp'] = df['timestamp'].astype(str)
@@ -558,14 +627,17 @@ async def check_weeks(year: int):
         supabase = create_client(supabase_url, supabase_key)
         weeks_data = {}
         
-        last_day = datetime(year, 12, 28)
+        # Use UTC timezone starting at 00:00
+        last_day = datetime(year, 12, 28, tzinfo=timezone.utc)
         total_weeks = last_day.isocalendar()[1]
         
         for week in range(1, total_weeks + 1):
             week_start = datetime.fromisocalendar(year, week, 1)
+            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
             week_end = datetime.fromisocalendar(year, week, 7)
-            week_end = week_end.replace(hour=23, minute=59, second=59)
+            week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
             
+            # Convert to milliseconds timestamp
             start_epoch = int(week_start.timestamp() * 1000)
             end_epoch = int(week_end.timestamp() * 1000)
             

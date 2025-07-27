@@ -5,6 +5,7 @@ import logging
 import numpy as np
 from numba import njit
 import sys
+from datetime import timezone, datetime
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -13,6 +14,20 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
+
+def get_local_timezone_offset():
+    """Get the local timezone offset from UTC as a string (e.g., 'UTC-4', 'UTC+2')"""
+    local_now = datetime.now()
+    utc_now = datetime.utcnow()
+    
+    # Calculate offset in hours
+    offset_seconds = (local_now - utc_now).total_seconds()
+    offset_hours = int(offset_seconds / 3600)
+    
+    if offset_hours >= 0:
+        return f"UTC+{offset_hours}"
+    else:
+        return f"UTC{offset_hours}"  # offset_hours already has the minus sign
 
 # Numba-optimized functions for rolling calculations
 @njit
@@ -70,18 +85,20 @@ def update_rolling_quant(flow: np.ndarray, offset_size: int, q: float) -> np.nda
 def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epoch: int = None, end_epoch: int = None) -> dict:
     """
     Analyze water consumption data from a pre-loaded DataFrame without database queries.
+    All timestamps are handled in UTC timezone.
     
     Args:
         data_df (pd.DataFrame): Input DataFrame with 'timestamp' and 'flow_rate' columns.
         window_size (int, optional): Size of the rolling window in minutes. Defaults to 60.
-        start_epoch (int, optional): Start timestamp in milliseconds. Defaults to None.
-        end_epoch (int, optional): End timestamp in milliseconds. Defaults to None.
+        start_epoch (int, optional): Start timestamp in milliseconds (UTC). Defaults to None.
+        end_epoch (int, optional): End timestamp in milliseconds (UTC). Defaults to None.
     
     Returns:
         dict: dictionary containing weekday and weekend data, peaks, totals, wasted water, and efficiencies.
     """
     # Handle empty DataFrame
     if data_df.empty:
+        logger.info("Input DataFrame is empty")
         empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
         return {
             'weekday_data': empty_df,
@@ -95,16 +112,28 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
             'weekday_efficiency': 0,
             'weekend_efficiency': 0
         }
+
+    # Debug logging for input data
+    logger.info(f"Input data shape: {data_df.shape}")
+    if not data_df.empty:
+        logger.info(f"Timestamp range in raw data: {data_df['timestamp'].min()} to {data_df['timestamp'].max()}")
+        logger.info(f"First few raw timestamps: {data_df['timestamp'].head().tolist()}")
 
     # Filter data by time range if specified
     filtered_data = data_df.copy()
     if start_epoch is not None:
+        before_filter = len(filtered_data)
         filtered_data = filtered_data[filtered_data['timestamp'] >= start_epoch]
+        logger.info(f"After start_epoch filter ({start_epoch}): {before_filter} -> {len(filtered_data)} records")
+    
     if end_epoch is not None:
+        before_filter = len(filtered_data)
         filtered_data = filtered_data[filtered_data['timestamp'] <= end_epoch]
+        logger.info(f"After end_epoch filter ({end_epoch}): {before_filter} -> {len(filtered_data)} records")
 
     # Handle empty filtered DataFrame
     if filtered_data.empty:
+        logger.info("No data after filtering by time range")
         empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
         return {
             'weekday_data': empty_df,
@@ -119,14 +148,31 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
             'weekend_efficiency': 0
         }
 
-    # Convert timestamp to datetime and resample
-    filtered_data['Timestamp'] = pd.to_datetime(filtered_data['timestamp'], unit='ms')
+    # Convert timestamp to datetime with UTC timezone explicitly
+    filtered_data['Timestamp'] = pd.to_datetime(filtered_data['timestamp'], unit='ms', utc=True)
     filtered_data = filtered_data.set_index('Timestamp')
+    
+    # Debug logging for timestamp conversion
+    logger.info(f"After timestamp conversion, datetime range: {filtered_data.index.min()} to {filtered_data.index.max()}")
+    logger.info(f"First few converted timestamps: {filtered_data.index[:5].tolist()}")
+    
+    # Resample to minutes (maintaining UTC timezone)
     data_resampled = filtered_data.resample('min').mean().fillna(0)
+    
+    logger.info(f"After resampling to minutes: {len(data_resampled)} records")
+    logger.info(f"Resampled time range: {data_resampled.index.min()} to {data_resampled.index.max()}")
 
     # Split into weekday and weekend data
     weekday_data = data_resampled[data_resampled.index.weekday < 5].copy()
     weekend_data = data_resampled[data_resampled.index.weekday >= 5].copy()
+    
+    logger.info(f"Weekday data: {len(weekday_data)} records")
+    logger.info(f"Weekend data: {len(weekend_data)} records")
+    
+    if not weekday_data.empty:
+        logger.info(f"Weekday range: {weekday_data.index.min()} to {weekday_data.index.max()}")
+    if not weekend_data.empty:
+        logger.info(f"Weekend range: {weekend_data.index.min()} to {weekend_data.index.max()}")
 
     # Calculate leaks for each dataset
     def calculate_leaks(df: pd.DataFrame, window_size: int) -> pd.DataFrame:
@@ -210,11 +256,15 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
     else:
         efficiency_percentage_weekends = 0
 
-    # Determine peak consumption
+    # Get local timezone offset for display
+    tz_offset = get_local_timezone_offset()
+
+    # Determine peak consumption with improved formatting including local timezone
     if not weekday_data.empty:
         weekday_peak_idx = weekday_data['flow_rate'].idxmax()
         weekday_peak_consumption = weekday_data['flow_rate'].max()
-        weekday_peak_day = weekday_peak_idx.strftime('%Y-%m-%d %H:%M')
+        # Format with local timezone information
+        weekday_peak_day = weekday_peak_idx.strftime(f'%Y-%m-%d %H:%M {tz_offset}')
     else:
         weekday_peak_consumption = 0
         weekday_peak_day = 'N/A'
@@ -222,7 +272,8 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
     if not weekend_data.empty:
         weekend_peak_idx = weekend_data['flow_rate'].idxmax()
         weekend_peak_consumption = weekend_data['flow_rate'].max()
-        weekend_peak_day = weekend_peak_idx.strftime('%Y-%m-%d %H:%M')
+        # Format with local timezone information
+        weekend_peak_day = weekend_peak_idx.strftime(f'%Y-%m-%d %H:%M {tz_offset}')
     else:
         weekend_peak_consumption = 0
         weekend_peak_day = 'N/A'
@@ -266,10 +317,17 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
         query = query.eq("place_id", place_id)
     if start_epoch is not None:
         query = query.gte("timestamp", start_epoch)
+        logger.info(f"Database query with start_epoch >= {start_epoch}")
     if end_epoch is not None:
         query = query.lte("timestamp", end_epoch)
+        logger.info(f"Database query with end_epoch <= {end_epoch}")
     
     response = query.execute()
     data = pd.DataFrame(response.data)
+    
+    # Debug logging for database results
+    logger.info(f"Database returned {len(data)} records")
+    if not data.empty:
+        logger.info(f"Database timestamp range: {data['timestamp'].min()} to {data['timestamp'].max()}")
     
     return analyze_data_from_df(data, window_size, start_epoch, end_epoch)

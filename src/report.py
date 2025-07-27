@@ -18,8 +18,6 @@ class Report:
         # Add logo path
         self.logo_path = os.path.abspath('static/logo-kimenko.png')
 
-        
-        
         # Optimize background image before encoding
         with Image.open('static/mountain.jpg') as img:
             # Resize image if too large (e.g., to max 1500px width)
@@ -54,10 +52,11 @@ class Report:
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             pdf_file = temp_file.name
+            # Remove unsupported options for WeasyPrint
             HTML(string=rendered_html).write_pdf(
                 pdf_file,
                 optimize_images=True,
-                jpeg_quality=50,
-                compress=True
+                jpeg_quality=50
+                # Removed compress=True as it's not supported by WeasyPrint
             )
         return pdf_file
