@@ -187,7 +187,7 @@ def create_weekly_trend_plot(weeks_data):
                 logger.error(f"Missing key '{k}' in week data for Semana {i}.")
                 raise ValueError(f"Missing key '{k}' in week data")
 
-    weeks = [f"Semana {i + 1}" for i in range(len(weeks_data))]
+    weeks = [i.get('title') for i in weeks_data]
     weekday_consumptions = [week['weekday_consumption'] for week in weeks_data]
     weekend_consumptions = [week['weekend_consumption'] for week in weeks_data]
     weekday_efficiencies = [week['weekday_efficiency'] for week in weeks_data]
@@ -270,62 +270,28 @@ def create_weekly_trend_plot(weeks_data):
     return temp_file.name
 
 def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List[Tuple[datetime, datetime]]:
-    """Get start and end dates for specified week number(s) in UTC, starting at 00:00."""
+    """Get start and end dates for specified week number(s) in UTC, from Monday 00:00 to Sunday 23:59."""
     week_ranges = []
     if num_weeks < 1:
         raise ValueError("num_weeks must be at least 1")
 
-    if week == 1:
-        # Use UTC timezone explicitly and ensure we start at 00:00
-        jan_first = datetime(year, 1, 1, tzinfo=timezone.utc)
-        days_to_monday = (jan_first.weekday()) % 7
-        week_start = jan_first - timedelta(days=days_to_monday)
-        
-        # Ensure week_start is at 00:00:00
-        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        if week_start.year < year and (jan_first - week_start).days > 3:
-            week_start = jan_first.replace(hour=0, minute=0, second=0, microsecond=0)
-            
-        week_end = week_start + timedelta(days=6)
-        week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        # Debug logging
-        logger.info(f"Week 1 range: {week_start} to {week_end}")
-        logger.info(f"Week 1 timestamps: {int(week_start.timestamp() * 1000)} to {int(week_end.timestamp() * 1000)}")
-        
-        week_ranges.append((week_start, week_end))
-        
-        for i in range(1, num_weeks):
-            next_week_start = week_end + timedelta(microseconds=1)
-            next_week_start = next_week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-            next_week_end = next_week_start + timedelta(days=6)
-            next_week_end = next_week_end.replace(hour=23, minute=59, second=59, microsecond=999999)
-            
-            # Debug logging
-            logger.info(f"Week {i+1} range: {next_week_start} to {next_week_end}")
-            logger.info(f"Week {i+1} timestamps: {int(next_week_start.timestamp() * 1000)} to {int(next_week_end.timestamp() * 1000)}")
-            
-            week_ranges.append((next_week_start, next_week_end))
-            week_end = next_week_end
-            
-        return week_ranges
-    
     for i in range(num_weeks):
         current_week = week + i
         if current_week < 1 or current_week > 53:
             raise ValueError(f"Requested out-of-range week number: {current_week}")
 
         try:
-            # Create datetime with UTC timezone starting at 00:00
+            # Monday 00:00:00 UTC
             week_start = datetime.fromisocalendar(year, current_week, 1)
             week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+            
+            # Sunday 23:59:59.999999 UTC
+            week_end = datetime.fromisocalendar(year, current_week, 7)
+            week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+            
         except ValueError:
             raise ValueError(f"No valid week {current_week} found in year {year}.")
 
-        week_end = datetime.fromisocalendar(year, current_week, 7)
-        week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
-        
         # Debug logging
         logger.info(f"Week {current_week} range: {week_start} to {week_end}")
         logger.info(f"Week {current_week} timestamps: {int(week_start.timestamp() * 1000)} to {int(week_end.timestamp() * 1000)}")
