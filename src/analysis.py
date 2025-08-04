@@ -1,19 +1,13 @@
 import pandas as pd
 from supabase import create_client
 import os
-import logging
 import numpy as np
 from numba import njit
-import sys
 from datetime import timezone, datetime
+from .logger_config import setup_logger, log_data_operation
 
-# Configure logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
+# Configuración de logging centralizada
+logger = setup_logger(__name__)
 
 def get_local_timezone_offset():
     """Get the local timezone offset from UTC as a string (e.g., 'UTC-4', 'UTC+2')"""
@@ -98,7 +92,7 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
     """
     # Handle empty DataFrame
     if data_df.empty:
-        logger.info("Input DataFrame is empty")
+        logger.debug("No input data provided")
         empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
         return {
             'weekday_data': empty_df,
@@ -113,27 +107,21 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
             'weekend_efficiency': 0
         }
 
-    # Debug logging for input data
-    logger.info(f"Input data shape: {data_df.shape}")
+    # Log básico de datos de entrada
     if not data_df.empty:
-        logger.info(f"Timestamp range in raw data: {data_df['timestamp'].min()} to {data_df['timestamp'].max()}")
-        logger.info(f"First few raw timestamps: {data_df['timestamp'].head().tolist()}")
+        logger.debug(f"Processing {len(data_df)} records")
 
     # Filter data by time range if specified
     filtered_data = data_df.copy()
     if start_epoch is not None:
-        before_filter = len(filtered_data)
         filtered_data = filtered_data[filtered_data['timestamp'] >= start_epoch]
-        logger.info(f"After start_epoch filter ({start_epoch}): {before_filter} -> {len(filtered_data)} records")
     
     if end_epoch is not None:
-        before_filter = len(filtered_data)
         filtered_data = filtered_data[filtered_data['timestamp'] <= end_epoch]
-        logger.info(f"After end_epoch filter ({end_epoch}): {before_filter} -> {len(filtered_data)} records")
 
     # Handle empty filtered DataFrame
     if filtered_data.empty:
-        logger.info("No data after filtering by time range")
+        logger.warning("No data found for specified time range")
         empty_df = pd.DataFrame(columns=["flow_rate", "RollingMin"])
         return {
             'weekday_data': empty_df,
@@ -152,27 +140,20 @@ def analyze_data_from_df(data_df: pd.DataFrame, window_size: int = 60, start_epo
     filtered_data['Timestamp'] = pd.to_datetime(filtered_data['timestamp'], unit='ms', utc=True)
     filtered_data = filtered_data.set_index('Timestamp')
     
-    # Debug logging for timestamp conversion
-    logger.info(f"After timestamp conversion, datetime range: {filtered_data.index.min()} to {filtered_data.index.max()}")
-    logger.info(f"First few converted timestamps: {filtered_data.index[:5].tolist()}")
+    # Log conversión de timestamps solo en DEBUG
+    logger.debug(f"Time range: {filtered_data.index.min().strftime('%Y-%m-%d %H:%M')} to {filtered_data.index.max().strftime('%Y-%m-%d %H:%M')}")
     
     # Resample to minutes (maintaining UTC timezone)
     data_resampled = filtered_data.resample('min').mean().fillna(0)
     
-    logger.info(f"After resampling to minutes: {len(data_resampled)} records")
-    logger.info(f"Resampled time range: {data_resampled.index.min()} to {data_resampled.index.max()}")
+    logger.debug(f"Resampled to {len(data_resampled)} minute intervals")
 
     # Split into weekday and weekend data
     weekday_data = data_resampled[data_resampled.index.weekday < 5].copy()
     weekend_data = data_resampled[data_resampled.index.weekday >= 5].copy()
     
-    logger.info(f"Weekday data: {len(weekday_data)} records")
-    logger.info(f"Weekend data: {len(weekend_data)} records")
-    
-    if not weekday_data.empty:
-        logger.info(f"Weekday range: {weekday_data.index.min()} to {weekday_data.index.max()}")
-    if not weekend_data.empty:
-        logger.info(f"Weekend range: {weekend_data.index.min()} to {weekend_data.index.max()}")
+    # Log resumen de datos
+    logger.info(f"Analysis complete: {len(weekday_data)} weekday, {len(weekend_data)} weekend records")
 
     # Calculate leaks for each dataset
     def calculate_leaks(df: pd.DataFrame, window_size: int) -> pd.DataFrame:
@@ -317,17 +298,15 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
         query = query.eq("place_id", place_id)
     if start_epoch is not None:
         query = query.gte("timestamp", start_epoch)
-        logger.info(f"Database query with start_epoch >= {start_epoch}")
+        logger.debug(f"Filtering from timestamp {start_epoch}")
     if end_epoch is not None:
         query = query.lte("timestamp", end_epoch)
-        logger.info(f"Database query with end_epoch <= {end_epoch}")
+        logger.debug(f"Filtering to timestamp {end_epoch}")
     
     response = query.execute()
     data = pd.DataFrame(response.data)
     
-    # Debug logging for database results
-    logger.info(f"Database returned {len(data)} records")
-    if not data.empty:
-        logger.info(f"Database timestamp range: {data['timestamp'].min()} to {data['timestamp'].max()}")
+    # Log resultado de consulta
+    log_data_operation(logger, "Database query", len(data), place_id)
     
     return analyze_data_from_df(data, window_size, start_epoch, end_epoch)

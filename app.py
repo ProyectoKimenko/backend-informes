@@ -18,21 +18,15 @@ import os
 import pandas as pd
 import tempfile
 from supabase import create_client
-import logging
-import sys
 import requests
+import time
 from src.analysis import analyze_data, analyze_data_from_df
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
-import time
+from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
 
-# Simplified logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-logger = logging.getLogger(__name__)
+# Configuración de logging centralizada
+logger = setup_logger(__name__)
 
 # Initialize FastAPI app and templates
 app = FastAPI()
@@ -45,6 +39,30 @@ app.add_middleware(
 )
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory=tempfile.gettempdir()), name="static")
+
+# Middleware para logging de requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # Procesar request
+    response = await call_next(request)
+    
+    # Calcular duración
+    duration_ms = (time.time() - start_time) * 1000
+    
+    # Log solo requests importantes (no incluir healthcheck, static files, etc.)
+    if not request.url.path.startswith(("/static", "/docs", "/redoc", "/openapi.json")):
+        log_request(logger, request.method, request.url.path, duration_ms)
+        
+        # Log errores HTTP
+        if response.status_code >= 400:
+            logger.warning(f"{request.method} {request.url.path} - HTTP {response.status_code}")
+    
+    return response
+
+# Log de inicio de aplicación
+log_startup(logger)
 
 # Constants
 WEEK_COLORS = {
@@ -292,9 +310,8 @@ def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List
         except ValueError:
             raise ValueError(f"No valid week {current_week} found in year {year}.")
 
-        # Debug logging
-        logger.info(f"Week {current_week} range: {week_start} to {week_end}")
-        logger.info(f"Week {current_week} timestamps: {int(week_start.timestamp() * 1000)} to {int(week_end.timestamp() * 1000)}")
+        # Solo log en DEBUG para desarrollo
+        logger.debug(f"Week {current_week}: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}")
         
         week_ranges.append((week_start, week_end))
 
@@ -314,9 +331,9 @@ def make_scraping_request(place_id: int, start_date: str, end_date: str):
             headers={"Content-Type": "application/json"},
             timeout=180
         )
-        logger.info(f"Scraping request completed for place {place_id}")
+        logger.info(f"Data updated for place {place_id}")
     except Exception as e:
-        logger.error(f"Background scraping request failed for place {place_id}: {str(e)}")
+        log_error(logger, f"data update for place {place_id}", e)
 
 # Initialize Supabase client
 supabase_url = os.environ.get("SUPABASE_URL")
@@ -336,7 +353,7 @@ async def get_places():
         places = response.data if response.data else []
         return {"places": places}
     except Exception as e:
-        logger.error(f"Error fetching places: {str(e)}")
+        log_error(logger, "fetching places", e)
         raise HTTPException(status_code=500, detail="Error fetching places")
 
 @app.get("/analysis", response_class=JSONResponse)
@@ -361,9 +378,10 @@ async def analysis_json(
         start_epoch = int(week_ranges[0][0].timestamp() * 1000)
         end_epoch   = int(week_ranges[-1][1].timestamp() * 1000)
         
-        # Debug logging
-        logger.info(f"Analysis query range: {start_epoch} to {end_epoch}")
-        logger.info(f"Analysis date range: {week_ranges[0][0]} to {week_ranges[-1][1]}")
+        # Log solo el resumen del análisis
+        start_date = week_ranges[0][0].strftime('%Y-%m-%d')
+        end_date = week_ranges[-1][1].strftime('%Y-%m-%d')
+        logger.info(f"Analysis requested: {start_date} to {end_date}")
 
         try:
             results = analyze_data(
@@ -373,7 +391,7 @@ async def analysis_json(
                 place_id=place_id
             )
         except Exception as e:
-            logger.warning(f"No data found for analysis: {str(e)}")
+            logger.warning("No data available for analysis period")
             return {
                 "total_water_wasted_weekdays":      None,
                 "efficiency_percentage_weekdays":   None,
@@ -384,11 +402,10 @@ async def analysis_json(
                 "time_series":                      []
             }
 
-        # Debug logging for data range
+        # Log resumen de datos procesados
         combined = pd.concat([results['weekday_data'], results['weekend_data']])
         if not combined.empty:
-            logger.info(f"Data range in results: {combined.index.min()} to {combined.index.max()}")
-            logger.info(f"First few timestamps: {combined.head().index.tolist()}")
+            logger.debug(f"Processed {len(combined)} data points from {combined.index.min().strftime('%Y-%m-%d')} to {combined.index.max().strftime('%Y-%m-%d')}")
         
         df = combined.reset_index()
         if not df.empty and 'timestamp' in df.columns:
@@ -407,7 +424,7 @@ async def analysis_json(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in analysis_json: {str(e)}")
+        log_error(logger, "data analysis", e)
         return {
             "total_water_wasted_weekdays":      None,
             "efficiency_percentage_weekdays":   None,
@@ -527,7 +544,7 @@ async def generate_weekly_pdf(
                              analysis_results['weekend_wasted'])
             
             if analysis_results['weekday_data'].empty and analysis_results['weekend_data'].empty:
-                logger.warning(f"No data available for plotting week {week_number}")
+                logger.warning(f"No data for week {week_number}")
                 weekday_section.add_data("plot", None)
                 weekend_section.add_data("plot", None)
             else:
@@ -565,7 +582,7 @@ async def generate_weekly_pdf(
         report.add_section(comparison_section)
         
         pdf_file = report.render()
-        logger.info(f"PDF report generated successfully")
+        logger.info("Report generated successfully")
 
         time_end = time.time()
         print(f"Time taken: {time_end - time_start} seconds")
@@ -578,7 +595,7 @@ async def generate_weekly_pdf(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error generating weekly PDF: {str(e)}")
+        log_error(logger, "PDF generation", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/check_weeks", response_class=JSONResponse)
@@ -628,7 +645,7 @@ async def check_weeks(year: int):
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.error(f"Error checking weeks: {str(e)}")
+        log_error(logger, "week validation", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/new_place", response_class=JSONResponse)
@@ -667,5 +684,5 @@ async def scrape_place(
 
     background_tasks.add_task(make_scraping_request, place_id, start_date, end_date)
     
-    logger.info(f"Scraping request queued for place {place_id}")
+    logger.info(f"Data sync queued for place {place_id}")
     return {"success": True, "message": "Scraping request initiated successfully"}
