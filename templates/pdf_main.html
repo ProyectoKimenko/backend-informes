@@ -257,6 +257,27 @@
                 </div>
             </div>
 
+            <!-- Total Consumption Summary -->
+            <div class="page-section" style="page-break-before: always; display: flex; flex-direction: column; align-items: center; width: 100%; margin: 40px 0;">
+                <div style="width: 100%; max-width: 210mm; text-align: center;">
+                    <h2 style="color: #1fa9c9; margin-bottom: 20px; font-size: 28px;">Consumo Total del Período</h2>
+                    <div style="background: linear-gradient(135deg, #1fa9c9 0%, #34495e 100%); 
+                                border-radius: 15px; padding: 30px; margin-bottom: 30px;
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <p style="color: white; font-size: 18px; margin: 0 0 10px 0;">Total Consumido en Todas las Semanas</p>
+                        <p style="color: white; font-size: 48px; font-weight: bold; margin: 0;">
+                            {{ "{:,.0f}".format(section.data.total_consumption_all_weeks) }} L
+                        </p>
+                    </div>
+                    
+                    <!-- Total Consumption Chart -->
+                    <h3 style="color: #2c3e50; margin: 30px 0 20px 0; font-size: 20px;">Consumo Total por Semana</h3>
+                    <img src="file://{{ section.data.total_consumption_chart }}" 
+                         alt="Consumo Total por Semana"
+                         style="width: 100%; height: auto; object-fit: contain; border-radius: 8px;">
+                </div>
+            </div>
+
             <!-- Metrics Table -->
             <div class="page-section"
                 style="page-break-before: always; display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 60px;">

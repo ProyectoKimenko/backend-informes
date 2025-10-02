@@ -287,6 +287,79 @@ def create_weekly_trend_plot(weeks_data):
         plt.close()
     return temp_file.name
 
+def create_total_weekly_consumption_chart(weeks_data):
+    """Create a minimalist stacked bar chart showing useful consumption and losses per week"""
+    weeks = [w['title'] for w in weeks_data]
+    total_consumptions = [w['weekday_consumption'] + w['weekend_consumption'] for w in weeks_data]
+    total_losses = [w['weekday_wasted'] + w['weekend_wasted'] for w in weeks_data]
+    colors = [w['color'] for w in weeks_data]
+    
+    # Calculate useful consumption (total - losses)
+    useful_consumptions = [max(0, total - loss) for total, loss in zip(total_consumptions, total_losses)]
+    
+    # Calculate loss percentages
+    loss_percentages = []
+    for consumption, loss in zip(total_consumptions, total_losses):
+        if consumption > 0:
+            loss_pct = (loss / consumption) * 100
+            loss_percentages.append(loss_pct)
+        else:
+            loss_percentages.append(0)
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Create stacked bars: useful consumption + losses
+    bars_useful = ax.bar(weeks, useful_consumptions, color=colors, 
+                         edgecolor='white', linewidth=2, alpha=0.85, label='Consumo Útil')
+    bars_loss = ax.bar(weeks, total_losses, bottom=useful_consumptions,
+                       color='#d62728', edgecolor='white', linewidth=2, 
+                       alpha=0.7, label='Pérdidas')
+    
+    # Clean styling
+    ax.set_title('Consumo Total por Semana', fontsize=16, weight='bold', pad=20, color='#2c3e50')
+    ax.set_ylabel('Litros', fontsize=13, weight='bold', color='#2c3e50')
+    ax.set_xlabel('Semana', fontsize=13, weight='bold', color='#2c3e50')
+    
+    # Minimal grid
+    ax.grid(True, alpha=0.2, axis='y', linestyle='-', linewidth=0.5)
+    ax.set_axisbelow(True)
+    
+    # Clean spines
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#cccccc')
+    ax.spines['bottom'].set_color('#cccccc')
+    
+    # Tick styling
+    ax.tick_params(axis='both', labelsize=11, colors='#2c3e50')
+    
+    # Legend in upper right to avoid overlap
+    ax.legend(loc='upper right', frameon=False, fontsize=11)
+    
+    # Add extra space on top for labels - set ylim with padding
+    if len(total_consumptions) > 0 and max(total_consumptions) > 0:
+        ax.set_ylim(0, max(total_consumptions) * 1.12)
+    
+    # Add total consumption value on top
+    for i, (total, loss, loss_pct) in enumerate(zip(total_consumptions, total_losses, loss_percentages)):
+        if total > 0:
+            # Total consumption label on top with offset
+            ax.text(i, total, f'{total:,.0f} L', 
+                   ha='center', va='bottom', fontsize=10, weight='bold', color='#2c3e50')
+            # Loss percentage label on the red section
+            if loss > 0 and loss > (total * 0.05):  # Only show if loss is > 5% to avoid cramping
+                loss_y_pos = useful_consumptions[i] + (loss / 2)
+                ax.text(i, loss_y_pos, f'{loss_pct:.1f}%', 
+                       ha='center', va='center', fontsize=9, 
+                       color='white', weight='bold')
+    
+    plt.tight_layout()
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+        plt.savefig(temp_file.name, dpi=100, bbox_inches='tight', facecolor='white')
+        plt.close()
+    return temp_file.name
+
 def get_dates_from_week_number(year: int, week: int, num_weeks: int = 4) -> List[Tuple[datetime, datetime]]:
     """Get start and end dates for specified week number(s) in UTC, from Monday 00:00 to Sunday 23:59."""
     week_ranges = []
@@ -576,8 +649,18 @@ async def generate_weekly_pdf(
         comparison_section.add_data('max_consumption', max_consumption)
         comparison_section.add_data('max_wasted', max_wasted)
         
+        # Calculate total consumption across all weeks
+        total_consumption_all_weeks = sum(
+            w['weekday_consumption'] + w['weekend_consumption'] for w in weeks_data
+        )
+        
         weekly_trend_plot = create_weekly_trend_plot(weeks_data)
         comparison_section.add_data('weekly_trend_plot', weekly_trend_plot)
+        
+        # Add total consumption chart
+        total_consumption_chart = create_total_weekly_consumption_chart(weeks_data)
+        comparison_section.add_data('total_consumption_chart', total_consumption_chart)
+        comparison_section.add_data('total_consumption_all_weeks', total_consumption_all_weeks)
         
         report.add_section(comparison_section)
         
