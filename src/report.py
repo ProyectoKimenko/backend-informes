@@ -18,23 +18,32 @@ class Report:
         # Add logo path
         self.logo_path = os.path.abspath('static/logo-kimenko.png')
 
-        # Optimize background image before encoding
-        with Image.open('static/mountain.jpg') as img:
-            # Resize image if too large (e.g., to max 1500px width)
-            max_width = 500
-            if img.width > max_width:
-                ratio = max_width / img.width
-                new_size = (max_width, int(img.height * ratio))
-                img = img.resize(new_size, Image.Resampling.LANCZOS)
-            
-            # Convert to RGB if necessary
-            if img.mode in ('RGBA', 'P'):
-                img = img.convert('RGB')
-            
-            # Save optimized image to bytes
-            buffer = BytesIO()
-            img.save(buffer, format='JPEG', quality=60, optimize=True)
-            self.background_image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        # Optimize background images before encoding
+        self.background_first_page_base64 = self._optimize_and_encode_image('static/fondo-primera-pagina.jpg')
+        self.background_report_base64 = self._optimize_and_encode_image('static/fondo-reporte.jpg')
+
+    def _optimize_and_encode_image(self, image_path):
+        """Helper to optimize and base64 encode an image"""
+        try:
+            with Image.open(image_path) as img:
+                # Resize image if too large (e.g., to max 1500px width)
+                max_width = 1500  # Increased resolution for better quality
+                if img.width > max_width:
+                    ratio = max_width / img.width
+                    new_size = (max_width, int(img.height * ratio))
+                    img = img.resize(new_size, Image.Resampling.LANCZOS)
+                
+                # Convert to RGB if necessary
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                
+                # Save optimized image to bytes
+                buffer = BytesIO()
+                img.save(buffer, format='JPEG', quality=85, optimize=True)
+                return base64.b64encode(buffer.getvalue()).decode('utf-8')
+        except Exception as e:
+            print(f"Error processing image {image_path}: {e}")
+            return ""
 
     def add_section(self, section):
         self.sections.append(section)
@@ -46,7 +55,8 @@ class Report:
             created_at=self.created_at,
             place_name=self.place_name,
             sections=self.sections,
-            background_image_base64=self.background_image_base64,
+            background_first_page_base64=self.background_first_page_base64,
+            background_report_base64=self.background_report_base64,
             logo_path=self.logo_path
         )
         
