@@ -1,13 +1,13 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.requests import Request
 from fastapi import Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta, timezone
 import calendar
 import colorsys
@@ -25,6 +25,7 @@ from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
 
+from worker.tasks import process_disaggregation
 # Configuración de logging centralizada
 logger = setup_logger(__name__)
 
@@ -37,6 +38,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+DATASETS = {}
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory=tempfile.gettempdir()), name="static")
 
@@ -220,7 +223,7 @@ def create_weekly_trend_plot(weeks_data):
     tz_offset = get_local_timezone_offset()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 1])
-    fig.suptitle(f'Tendencias Semanales de Consumo de Agua\n(Todos los datos en hora {tz_offset})', 
+    fig.suptitle(f'Tendencias Semanales de Consumo de Agua\n(Todos los datos en hora {tz_offset})',
                  fontsize=20, y=0.95, weight='bold')
 
     width = 0.35
@@ -748,8 +751,8 @@ async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
 @app.post("/scrape_place", response_class=JSONResponse)
 async def scrape_place(
     background_tasks: BackgroundTasks,
-    place_id: int = Body(...), 
-    start_date: str = Body(...), 
+    place_id: int = Body(...),
+    start_date: str = Body(...),
     end_date: str = Body(...)
 ):
     """Scrape data for a place between start_date and end_date."""
@@ -759,13 +762,101 @@ async def scrape_place(
         raise HTTPException(status_code=400, detail="start_date is required")
     if end_date is None:
         raise HTTPException(status_code=400, detail="end_date is required")
-    
+
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_KEY")
     if not supabase_url or not supabase_key:
         raise HTTPException(status_code=500, detail="Supabase credentials not set.")
 
     background_tasks.add_task(make_scraping_request, place_id, start_date, end_date)
-    
+
     logger.info(f"Data sync queued for place {place_id}")
     return {"success": True, "message": "Scraping request initiated successfully"}
+""" @app.post("/datasets/")
+def upload_dataset(file: UploadFile = File(...)):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="The file must be a CSV.")
+    try:
+        df = load_dataset(file.file)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Failed to load CSV file.")
+    if "flow" not in df.columns:
+        raise HTTPException(status_code=400, detail="The CSV must contain a 'flow' column.")
+    if not pd.api.types.is_numeric_dtype(df["flow"]):
+        raise HTTPException(status_code=400, detail="The 'flow' column must be numeric.")
+    if not pd.api.types.is_datetime64_any_dtype(df.index):
+        raise HTTPException(status_code=400, detail="The CSV index must be a datetime index.")
+    dataset_id = file.filename.split(".")[0]
+    DATASETS[dataset_id] = {
+        "raw": df,
+        "status": DatasetStatus.UPLOADED
+    }
+    return {"dataset_id": dataset_id,
+            "status": DatasetStatus.UPLOADED,
+            "rows": len(df)
+            }
+@app.post("/datasets/{dataset_id}/preprocess")
+def preprocess_dataset(dataset_id: str):
+    try:
+        df = DATASETS[dataset_id]["raw"]
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+    df_processed = preprocess_signal(df)
+
+    DATASETS[dataset_id]["processed"] = df_processed
+    DATASETS[dataset_id]["status"] = DatasetStatus.PREPROCESSED
+    return {"dataset_id": dataset_id,
+            "status": DatasetStatus.PREPROCESSED,
+            "rows": len(df_processed)
+        }
+
+@app.post("/datasets/{dataset_id}/analyze")
+def analyze_dataset(dataset_id: str):
+    try:
+        df_processed = DATASETS[dataset_id]["processed"]
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+
+    profiles = learn_fixtures(df_processed)
+    df_events = disaggregate_events(df_processed, profiles)
+
+    DATASETS[dataset_id]["profiles"] = profiles
+    DATASETS[dataset_id]["disaggregated"] = df_events
+    DATASETS[dataset_id]["status"] = DatasetStatus.ANALYZED
+
+    return {"dataset_id": dataset_id,
+            "status": DatasetStatus.ANALYZED,
+            "rows": len(df_events)}
+
+@app.get("/datasets/{dataset_id}}/consumption")
+def get_rebuilt_consumption(dataset_id: str, start_time: Optional[str] = None, end_time: Optional[str] = None):
+    try:
+        df_processed = DATASETS[dataset_id]["processed"]
+        df_events = DATASETS[dataset_id]["disaggregated"]
+        profiles = DATASETS[dataset_id]["profile"]
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Dataset not found or not analyzed yet.")
+
+    df_final = rebuild_consumption(df_processed, df_events, profiles)
+
+    if start_time and end_time:
+        df_final = df_final.loc[start_time:end_time]
+    return df_final.to_dict(orient="records")
+
+@app.get("/consumption/stackplot/")
+def get_stackplot(start_time: Optional[str] = None, end_time: Optional[str] = None):
+
+
+    df_raw = load_dataset(f"Dataset/datos_sinteticos_2s.csv")
+    df_clean = preprocess_signal(df_raw)
+    profiles = learn_fixtures(df_clean)
+    df_events = disaggregate_events(df_clean, profiles)
+    df_final = rebuild_consumption(df_clean, df_events, profiles)
+
+    buf = generate_stackplot(df_final, start_time, end_time)
+    return StreamingResponse(buf, media_type="image/png")
+ """
+@app.post("/jobs/disaggregate/{place_id}")
+def trigger(place_id: str):
+    task = process_disaggregation.delay(place_id)
+    return {"task_id": task.id}

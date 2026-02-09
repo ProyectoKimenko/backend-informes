@@ -1,12 +1,49 @@
 services:
   server:
-    build:
-      context: .
+    build: .
     ports:
-      - 8000:8000
+      - "8000:8000"
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
       - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
       - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
+
+    depends_on:
+      - redis
+      - worker
+
+  worker:
+    build: .
+    container_name: disagg-worker
+    command: celery -A worker.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    environment:
+      - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
+      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+
+  beat:
+      build: .
+      command: celery -A worker.celery_app beat --loglevel=info
+      volumes:
+        - .:/app
+      environment:
+        - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
+        - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
+        - REDIS_URL=redis://redis:6379/0
+      depends_on:
+        - redis
+        - worker
+
+    # 4. Redis (Cola de mensajes)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
