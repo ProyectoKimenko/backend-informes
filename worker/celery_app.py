@@ -21,7 +21,7 @@ celery_app.conf.update(
 
 celery_app.conf.beat_schedule = {
     "disaggregate-all-every-hour": {
-        "task": "worker.tasks.process_disaggregation",
-        "schedule": crontab(minute=0), 
+        "task": "worker.tasks.process_all_places",
+        "schedule": crontab(minute=0),
     },
 }

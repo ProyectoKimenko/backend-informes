@@ -1,6 +1,7 @@
 from worker.celery_app import celery_app
-from services.supabase_service import fetch_measurements, save_disaggregation_result
+from services.supabase_service import fetch_measurements, save_disaggregation_result, get_all_places
 from pipeline.disaggregator import run_disaggregation
+from datetime import datetime, timedelta
 
 @celery_app.task(
     bind=True,
@@ -25,4 +26,24 @@ def process_disaggregation(self, place_id: str, start_time: str | None = None, e
         "place_id": place_id,
         "events": len(df_events),
         "devices": profiles,
+    }
+
+
+@celery_app.task(name="worker.tasks.process_all_places")
+def process_all_places():
+    places = get_all_places()
+    end_time = datetime.now()
+    start_time = end_time - timedelta(hours=1)
+
+    results = []
+    for place in places:
+        result = process_disaggregation.delay(
+            place_id=place["id"],
+            start_time=start_time.isoformat(),
+            end_time=end_time.isoformat(),
+        )
+        results.append(result)
+    return {
+        'total_places': len(places),
+        'tasks_submitted': len(results),
     }

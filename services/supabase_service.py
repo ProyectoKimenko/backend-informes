@@ -91,3 +91,8 @@ def save_disaggregation_result(
 
 
     print(f"[Disaggregation] place_id={place_id} Saved: Events={len(df_events)}, Profiles={len(profiles)}")
+
+def get_all_places():
+    sb = get_supabase()
+    result = sb.table("places").select("*").execute()
+    return result.data or []

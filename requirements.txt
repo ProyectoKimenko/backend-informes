@@ -12,3 +12,4 @@ scikit-learn
 celery
 redis
 python-multipart
+pydantic

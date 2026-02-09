@@ -24,7 +24,7 @@ from src.analysis import analyze_data, analyze_data_from_df
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
-
+from pydantic import BaseModel
 from worker.tasks import process_disaggregation
 # Configuración de logging centralizada
 logger = setup_logger(__name__)
@@ -38,6 +38,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class DisaggregationRequest(BaseModel):
+    place_id: int
+    start_time: str | None = None
+    end_time: str | None = None
 
 DATASETS = {}
 templates = Jinja2Templates(directory="templates")
@@ -772,91 +777,88 @@ async def scrape_place(
 
     logger.info(f"Data sync queued for place {place_id}")
     return {"success": True, "message": "Scraping request initiated successfully"}
-""" @app.post("/datasets/")
-def upload_dataset(file: UploadFile = File(...)):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="The file must be a CSV.")
-    try:
-        df = load_dataset(file.file)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Failed to load CSV file.")
-    if "flow" not in df.columns:
-        raise HTTPException(status_code=400, detail="The CSV must contain a 'flow' column.")
-    if not pd.api.types.is_numeric_dtype(df["flow"]):
-        raise HTTPException(status_code=400, detail="The 'flow' column must be numeric.")
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        raise HTTPException(status_code=400, detail="The CSV index must be a datetime index.")
-    dataset_id = file.filename.split(".")[0]
-    DATASETS[dataset_id] = {
-        "raw": df,
-        "status": DatasetStatus.UPLOADED
-    }
-    return {"dataset_id": dataset_id,
-            "status": DatasetStatus.UPLOADED,
-            "rows": len(df)
-            }
-@app.post("/datasets/{dataset_id}/preprocess")
-def preprocess_dataset(dataset_id: str):
-    try:
-        df = DATASETS[dataset_id]["raw"]
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Dataset not found.")
-    df_processed = preprocess_signal(df)
 
-    DATASETS[dataset_id]["processed"] = df_processed
-    DATASETS[dataset_id]["status"] = DatasetStatus.PREPROCESSED
-    return {"dataset_id": dataset_id,
-            "status": DatasetStatus.PREPROCESSED,
-            "rows": len(df_processed)
-        }
-
-@app.post("/datasets/{dataset_id}/analyze")
-def analyze_dataset(dataset_id: str):
-    try:
-        df_processed = DATASETS[dataset_id]["processed"]
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Dataset not found.")
-
-    profiles = learn_fixtures(df_processed)
-    df_events = disaggregate_events(df_processed, profiles)
-
-    DATASETS[dataset_id]["profiles"] = profiles
-    DATASETS[dataset_id]["disaggregated"] = df_events
-    DATASETS[dataset_id]["status"] = DatasetStatus.ANALYZED
-
-    return {"dataset_id": dataset_id,
-            "status": DatasetStatus.ANALYZED,
-            "rows": len(df_events)}
-
-@app.get("/datasets/{dataset_id}}/consumption")
-def get_rebuilt_consumption(dataset_id: str, start_time: Optional[str] = None, end_time: Optional[str] = None):
-    try:
-        df_processed = DATASETS[dataset_id]["processed"]
-        df_events = DATASETS[dataset_id]["disaggregated"]
-        profiles = DATASETS[dataset_id]["profile"]
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Dataset not found or not analyzed yet.")
-
-    df_final = rebuild_consumption(df_processed, df_events, profiles)
-
-    if start_time and end_time:
-        df_final = df_final.loc[start_time:end_time]
-    return df_final.to_dict(orient="records")
-
-@app.get("/consumption/stackplot/")
-def get_stackplot(start_time: Optional[str] = None, end_time: Optional[str] = None):
-
-
-    df_raw = load_dataset(f"Dataset/datos_sinteticos_2s.csv")
-    df_clean = preprocess_signal(df_raw)
-    profiles = learn_fixtures(df_clean)
-    df_events = disaggregate_events(df_clean, profiles)
-    df_final = rebuild_consumption(df_clean, df_events, profiles)
-
-    buf = generate_stackplot(df_final, start_time, end_time)
-    return StreamingResponse(buf, media_type="image/png")
- """
 @app.post("/jobs/disaggregate/{place_id}")
 def trigger(place_id: str):
     task = process_disaggregation.delay(place_id)
     return {"task_id": task.id}
+@app.post("/api/disaggregate/trigger")
+async def trigger_disaggregation(request: DisaggregationRequest):
+    if not request.start_time or not request.end_time:
+        end_time = datetime.now()
+        start_time = end_time - timedelta(hours=1)
+        request.start_time = start_time.isoformat()
+        request.end_time = end_time.isoformat()
+    
+    # Lanzar tarea Celery
+    task = process_disaggregation.delay(
+        place_id=str(request.place_id),
+        start_time=request.start_time,
+        end_time=request.end_time
+    )
+    
+    return {
+        "task_id": task.id,
+        "status": "processing",
+        "place_id": request.place_id,
+        "message": "Disaggregation started"
+    }
+
+
+@app.get("/api/disaggregate/status/{task_id}")
+async def get_task_status(task_id: str):
+    from celery.result import AsyncResult
+    
+    task_result = AsyncResult(task_id, app=celery_app)
+    
+    if task_result.state == 'PENDING':
+        response = {
+            'task_id': task_id,
+            'status': 'pending',
+            'progress': 0
+        }
+    elif task_result.state == 'STARTED':
+        response = {
+            'task_id': task_id,
+            'status': 'processing',
+            'progress': 50
+        }
+    elif task_result.state == 'SUCCESS':
+        response = {
+            'task_id': task_id,
+            'status': 'completed',
+            'progress': 100,
+            'result': task_result.result
+        }
+    elif task_result.state == 'FAILURE':
+        response = {
+            'task_id': task_id,
+            'status': 'failed',
+            'error': str(task_result.info)
+        }
+    else:
+        response = {
+            'task_id': task_id,
+            'status': task_result.state,
+            'progress': 0
+        }
+
+    return response
+
+
+@app.post("/api/disaggregate/last-hour/{place_id}")
+async def trigger_last_hour(place_id: int):
+    end_time = datetime.now()
+    start_time = end_time - timedelta(hours=1)
+
+    task = process_disaggregation.delay(
+        place_id=str(place_id),
+        start_time=start_time.isoformat(),
+        end_time=end_time.isoformat()
+    )
+
+    return {
+        "task_id": task.id,
+        "status": "processing",
+        "place_id": place_id
+    }
