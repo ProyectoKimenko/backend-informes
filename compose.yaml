@@ -14,6 +14,8 @@ services:
     depends_on:
       - redis
       - worker
+    networks:
+      - kimenko
 
   worker:
     build: .
@@ -28,22 +30,32 @@ services:
       - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/app
-
+    networks:
+      - kimenko
   beat:
-      build: .
-      command: celery -A worker.celery_app beat --loglevel=info
-      volumes:
-        - .:/app
-      environment:
-        - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
-        - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
-        - REDIS_URL=redis://redis:6379/0
-      depends_on:
-        - redis
-        - worker
-
+    build: .
+    command: celery -A worker.celery_app beat --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
+      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - kimenko
     # 4. Redis (Cola de mensajes)
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    container_name: kimenko-redis
+    volumes:
+    - redis_data:/data
+    networks:
+      - kimenko
+volumes:
+  redis_data:
+networks:
+  kimenko:
+    external: true

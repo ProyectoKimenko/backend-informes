@@ -25,7 +25,12 @@ from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
 from pydantic import BaseModel
-from worker.tasks import process_disaggregation
+from worker.tasks import process_disaggregation, train_model
+from services.redis_client import redis_client as redis
+from services.supabase_service import get_stackplot_data
+import json
+from celery.result import AsyncResult
+from worker.celery_app import celery_app
 # Configuración de logging centralizada
 logger = setup_logger(__name__)
 
@@ -779,7 +784,7 @@ async def scrape_place(
     return {"success": True, "message": "Scraping request initiated successfully"}
 
 @app.post("/jobs/disaggregate/{place_id}")
-def trigger(place_id: str):
+def trigger(place_id: int):
     task = process_disaggregation.delay(place_id)
     return {"task_id": task.id}
 @app.post("/api/disaggregate/trigger")
@@ -792,7 +797,7 @@ async def trigger_disaggregation(request: DisaggregationRequest):
     
     # Lanzar tarea Celery
     task = process_disaggregation.delay(
-        place_id=str(request.place_id),
+        place_id=request.place_id,
         start_time=request.start_time,
         end_time=request.end_time
     )
@@ -807,7 +812,7 @@ async def trigger_disaggregation(request: DisaggregationRequest):
 
 @app.get("/api/disaggregate/status/{task_id}")
 async def get_task_status(task_id: str):
-    from celery.result import AsyncResult
+    
     
     task_result = AsyncResult(task_id, app=celery_app)
     
@@ -852,7 +857,7 @@ async def trigger_last_hour(place_id: int):
     start_time = end_time - timedelta(hours=1)
 
     task = process_disaggregation.delay(
-        place_id=str(place_id),
+        place_id=place_id,
         start_time=start_time.isoformat(),
         end_time=end_time.isoformat()
     )
@@ -862,3 +867,148 @@ async def trigger_last_hour(place_id: int):
         "status": "processing",
         "place_id": place_id
     }
+
+@app.get("/scrapers/{scraper_id}/status")
+def scraper_status(scraper_id: str):
+    liveness_key = f"scraper:{scraper_id}:liveness"
+    state_key = f"scraper:{scraper_id}:state"
+    metrics_success = f"scraper:metrics:{scraper_id}:success"
+    metrics_errors = f"scraper:metrics:{scraper_id}:errors"
+
+    alive = bool(redis.exists(liveness_key))
+    last_heartbeat = int(redis.get(liveness_key)) if alive else None
+
+    raw_state = redis.get(state_key)
+    state = json.loads(raw_state) if raw_state else None
+
+    success = int(redis.get(metrics_success) or 0)
+    errors = int(redis.get(metrics_errors) or 0)
+
+    if not alive:
+        health = "DOWN"
+    elif state and state.get("status") == "error":
+        health = "ERROR"
+    elif errors > 5:
+        health = "DEGRADED"
+    else:
+        health = "RUNNING"
+
+    return {
+        "scraper_id": scraper_id,
+        "alive": alive,
+        "health": health,
+        "last_heartbeat_ts": last_heartbeat,
+        "state": state,
+        "metrics": {
+            "success": success,
+            "errors": errors,
+        },
+    }
+
+@app.get("/monitors", response_class=JSONResponse)
+async def get_monitors():
+    """
+    Devuelve un listado unificado de Lugares + Estado de su Scraper.
+    Sirve para detectar qué lugares de la BD no tienen un scraper corriendo (DOWN).
+    """
+    try:
+        # 1. FUENTE DE VERDAD: Obtener todos los lugares registrados en Supabase
+        response = supabase.table("places").select("*").order('id').execute()
+        places = response.data if response.data else []
+        
+        monitors = []
+
+        # 2. VERIFICACIÓN: Iterar cada lugar y buscar su rastro en Redis
+        for place in places:
+            place_id = place['id']
+            # Construimos el ID que el scraper DEBERÍA tener si estuviera corriendo
+            scraper_id = f"scraper_{place_id}"
+            
+            # Definimos las claves donde ese scraper debería estar escribiendo
+            liveness_key = f"scraper:{scraper_id}:liveness"
+            state_key = f"scraper:{scraper_id}:state"
+            metrics_success_key = f"scraper:metrics:{scraper_id}:success"
+            metrics_errors_key = f"scraper:metrics:{scraper_id}:errors"
+
+            # 3. CONSULTA: ¿Existe este scraper en la memoria de Redis?
+            # redis.exists devuelve > 0 si la clave existe
+            alive = bool(redis.exists(liveness_key))
+            
+            # Obtenemos el estado detallado si existe
+            raw_state = redis.get(state_key)
+            state_data = json.loads(raw_state) if raw_state else None
+            
+            success_count = int(redis.get(metrics_success_key) or 0)
+            error_count = int(redis.get(metrics_errors_key) or 0)
+
+            # 4. DIAGNÓSTICO DE SALUD
+            health = "DOWN" # Asumimos que no existe por defecto
+            
+            if alive:
+                # Si existe la clave de vida, evaluamos la calidad
+                if state_data and state_data.get("status") == "error":
+                    health = "ERROR"
+                elif error_count > 5: # Si hay muchos errores recientes
+                    health = "DEGRADED"
+                else:
+                    health = "RUNNING"
+
+            # 5. CONSTRUCCIÓN DEL DATO COMBINADO
+            monitors.append({
+                "id": place_id,
+                "name": place['name'],
+                "flow_reporter_id": place.get('flow_reporter_id'),
+                "scraper_id": scraper_id,
+                "health": health, # AQUÍ es donde ves si existe (RUNNING) o falta (DOWN)
+                "metrics": {
+                    "last_value": state_data.get('last_value') if state_data else None,
+                    "uptime": state_data.get('uptime_sec') if state_data else 0,
+                    "total_readings": success_count,
+                    "errors": error_count
+                }
+            })
+
+        return {"monitors": monitors}
+
+    except Exception as e:
+        log_error(logger, "fetching monitors", e)
+        raise HTTPException(status_code=500, detail=f"Error fetching monitors: {str(e)}")
+
+@app.get("/analysis/stackplot", response_class=JSONResponse)
+async def get_stackplot(place_id: int, start_date: str, end_date: str, granularity: str = "day"):
+    try:
+        if len(start_date) == 10: start_date += "T00:00:00"
+        if len(end_date) == 10: end_date += "T23:59:59"
+        df = get_stackplot_data(place_id, start_date, end_date, granularity)
+        if df.empty:
+            return {
+                "place_id": place_id,
+                "granularity": granularity,
+                "categories": [],
+                "data": []
+            }
+
+        df = df.reset_index()
+        df['time_bucket']= pd.to_datetime(df['time_bucket'], utc=True)
+        df['time_bucket'] = df['time_bucket'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        data = df.to_dict(orient='records')
+
+        categories = [c for c in df.columns if c != 'time_bucket']
+
+        return {
+            "place_id": place_id,
+            "granularity": granularity,
+            "categories": categories,
+            "data": data
+        }
+    except Exception as e:
+        log_error(logger, "fetching stackplot data", e)
+        raise HTTPException(status_code=500, detail=f"Error fetching stackplot data: {str(e)}")
+@app.post("/api/disaggregate/train")
+def trigger_training(req: DisaggregationRequest):
+    end_time = req.end_time or datetime.now().isoformat()
+    start_time = req.start_time or (datetime.now() -timedelta(days=7)).isoformat()
+
+    task = train_model.delay(req.place_id, start_time, end_time)
+    return {"task_id": task.id, "status": "Training started"}

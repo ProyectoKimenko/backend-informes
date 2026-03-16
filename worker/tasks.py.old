@@ -1,0 +1,213 @@
+from worker.celery_app import celery_app
+from services.supabase_service import (
+    fetch_measurements, 
+    get_official_profiles, 
+    save_disaggregation_result, 
+    get_all_places, 
+    bulk_insert_dissagregated,
+    save_official_profiles
+)
+from pipeline.disaggregator import run_disaggregation
+from datetime import datetime, timedelta
+import pandas as pd
+from services.supabase_service import get_supabase
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    retry_kwargs={"max_retries": 3},
+    retry_jitter=True,
+    name="worker.tasks.process_disaggregation",
+)
+def process_disaggregation(self, place_id: int, start_time: str | None = None, end_time: str | None = None):
+
+    if not start_time or not end_time:
+        end_dt = datetime.utcnow()
+        start_dt = end_dt - timedelta(days=1)
+        start_time = start_dt.isoformat()
+        end_time = end_dt.isoformat()
+
+    official_profiles = get_official_profiles(place_id)
+
+    if not official_profiles:
+        return {
+            "place_id": place_id,
+            "status": "no_model_found"
+        }
+
+    profiles = {
+        i: {
+            "name": p["name"],
+            "mean_flow": p["mean_flow"],
+            "st_deviation": p["st_deviation"],
+            "weight": p["weight"]
+        }
+        for i, p in enumerate(official_profiles)
+    }
+
+
+    df = fetch_measurements(
+        place_id=place_id,
+        start_time=start_time,
+        end_time=end_time
+    )
+
+    if df.empty:
+        return {"place_id": place_id, "status": "no_data"}
+
+
+    df_events, df_result = run_disaggregation(df, profiles)
+
+    save_disaggregation_result(
+        place_id,
+        df_events,
+        df_result,
+    )
+
+    return {
+        "place_id": place_id,
+        "status": "inference_done",
+        "events_detected": len(df_events),
+        "devices_used": len(profiles)
+    }
+
+
+@celery_app.task(name="worker.tasks.process_all_places")
+def process_all_places():
+
+    places = get_all_places()
+
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(days=1)
+
+    for place in places:
+        process_disaggregation.delay(
+            place_id=place["id"],
+            start_time=start_time.isoformat(),
+            end_time=end_time.isoformat(),
+        )
+
+    return {
+        "places_submitted": len(places)
+    }
+
+
+@celery_app.task(name="worker.tasks.train_model")
+def train_model(place_id: int, start_time: str, end_time: str):
+
+    df = fetch_measurements(
+        place_id=place_id,
+        start_time=start_time,
+        end_time=end_time
+    )
+
+    if df.empty:
+        return {"status": "no_data"}
+
+    from pipeline.disaggregator import train_disaggregator
+
+    profiles = train_disaggregator(df)
+
+    if not profiles:
+        return {"status": "no_patterns_found"}
+
+    save_official_profiles(place_id, profiles)
+
+    return {
+        "status": "trained",
+        "profiles_saved": len(profiles)
+    }
+
+@celery_app.task(name="worker.tasks.backfill_disaggregated_readings")
+def backfill_disaggregated_readings(place_id: int):
+
+    sb = get_supabase()
+
+    print(f"[Backfill] Fetching events for place_id={place_id}")
+
+    response = (
+        sb.table("disaggregation_events")
+        .select("device_name, start_time, end_time, flow_rate")
+        .eq("place_id", place_id)
+        .order("start_time")
+        .execute()
+    )
+
+    events = response.data
+
+    if not events:
+        return {"status": "no_events_found"}
+
+    df_events = pd.DataFrame(events)
+    df_events["start_time"] = pd.to_datetime(df_events["start_time"], utc=True)
+    df_events["end_time"] = pd.to_datetime(df_events["end_time"], utc=True)
+    df_events.rename(columns={"device_name": "device"}, inplace=True)
+
+    print(f"[Backfill] Generating minute buckets for {len(df_events)} events")
+
+    minute_records = generate_minute_downsample(df_events, place_id)
+
+    print(f"[Backfill] Inserting {len(minute_records)} minute rows")
+
+    bulk_insert_dissagregated(minute_records)
+
+    return {
+        "status": "backfill_completed",
+        "events_processed": len(df_events),
+        "minutes_inserted": len(minute_records)
+    }
+def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
+
+    records = []
+
+    if df_events.empty:
+        return []
+
+    for _, row in df_events.iterrows():
+
+        start = row["start_time"]
+        end = row["end_time"]
+        flow_rate = float(row["flow_rate"])
+        device = row["device"]
+
+        # Generar rango de minutos que cubren el evento
+        minute_range = pd.date_range(
+            start.floor("min"),
+            end.ceil("min"),
+            freq="min"
+        )
+
+        for minute_start in minute_range:
+
+            minute_end = minute_start + pd.Timedelta(minutes=1)
+
+            overlap_start = max(start, minute_start)
+            overlap_end = min(end, minute_end)
+
+            overlap_seconds = (overlap_end - overlap_start).total_seconds()
+
+            if overlap_seconds > 0:
+                volume = flow_rate * (overlap_seconds / 60)
+
+                records.append({
+                    "place_id": place_id,
+                    "time_bucket": minute_start.isoformat(),  # JSON safe
+                    "category": device,
+                    "volume_liters": float(round(volume, 6))
+                })
+
+    if not records:
+        return []
+
+    # 🔥 Agrupar para evitar duplicados en mismo minuto + device
+    df_records = pd.DataFrame(records)
+
+    df_grouped = (
+        df_records
+        .groupby(["place_id", "time_bucket", "category"], as_index=False)
+        .agg({"volume_liters": "sum"})
+    )
+
+    return df_grouped.to_dict(orient="records")

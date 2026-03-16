@@ -1,0 +1,284 @@
+import numpy as np
+import pandas as pd
+from typing import Tuple, Dict
+from itertools import combinations
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+
+# -----------------------------------------------------------------------------
+# 1. HEURÍSTICA DE NOMBRES (estabilidad visual)
+# -----------------------------------------------------------------------------
+def get_device_category(flow_rate: float) -> str:
+    """Asigna nombre consistente basado en caudal físico."""
+    if flow_rate < 0.5:
+        return "Ruido"
+    if flow_rate < 2.0:
+        return "Fuga / Goteo"
+    if flow_rate < 5.0:
+        return "Grifo Baño"
+    if flow_rate < 10.0:
+        return "Ducha / Grifo Cocina"
+    if flow_rate < 18.0:
+        return "Inodoro / Lavadora"
+    return "Riego / Consumo Alto"
+
+
+# -----------------------------------------------------------------------------
+# 2. PREPROCESAMIENTO
+# -----------------------------------------------------------------------------
+def preprocess_signal(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        df = df.set_index("timestamp")
+
+    df = df.sort_index()
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("El índice del DataFrame debe ser DatetimeIndex")
+
+    if "flow" not in df.columns and "flow_rate" in df.columns:
+        df.rename(columns={"flow_rate": "flow"}, inplace=True)
+    elif "flow" not in df.columns:
+        raise KeyError("El DataFrame debe contener una columna llamada 'flow' o 'flow_rate'")
+
+    # Suavizado robusto (mediana)
+    df["flow_smooth"] = df["flow"].rolling(window=5, center=True, min_periods=1).median()
+    df["flow_smooth"] = df["flow_smooth"].fillna(df["flow"])
+
+    # Derivada
+    df["delta"] = df["flow_smooth"].diff().fillna(0)
+
+    return df
+
+
+# -----------------------------------------------------------------------------
+# 3. ENTRENAMIENTO (no supervisado simple por clustering en niveles estables)
+# -----------------------------------------------------------------------------
+def train_disaggregator(
+    df: pd.DataFrame,
+    max_clusters: int = 6,
+    min_stable_flow: float = 0.5,
+    stable_delta: float = 0.2
+) -> Dict[int, Dict]:
+    df_proc = preprocess_signal(df)
+
+    stable_mask = (
+        (df_proc["delta"].abs() < stable_delta) &
+        (df_proc["flow_smooth"] > min_stable_flow)
+    )
+    stable_values = df_proc.loc[stable_mask, "flow_smooth"].values.reshape(-1, 1)
+
+    if len(stable_values) < 100:
+        print("No hay suficientes datos estables para entrenar.")
+        return {}
+
+    scaler = StandardScaler()
+    stable_scaled = scaler.fit_transform(stable_values)
+
+    n_clusters = min(max_clusters, len(stable_values) // 100 + 2)
+
+    kmeans = KMeans(
+        n_clusters=n_clusters,
+        n_init=20,
+        random_state=42
+    )
+    kmeans.fit(stable_scaled)
+
+    labels = kmeans.labels_
+
+    profiles: Dict[int, Dict] = {}
+    category_counters: Dict[str, int] = {}
+
+    for i in range(n_clusters):
+        cluster_vals = stable_values[labels == i].flatten()
+        if len(cluster_vals) < 30:
+            continue
+
+        mean = float(np.mean(cluster_vals))
+        std = float(np.std(cluster_vals))
+
+        # Piso mínimo de std (crítico para estabilidad del score)
+        std = max(std, 0.05 * mean, 0.1)
+
+        base_category = get_device_category(mean)
+        category_counters[base_category] = category_counters.get(base_category, 0) + 1
+        device_name = f"{base_category}_{category_counters[base_category]}"
+
+        profiles[i] = {
+            "name": device_name,
+            "mean_flow": float(round(mean, 2)),
+            "st_deviation": float(round(std, 2)),
+            "weight": float(round(len(cluster_vals) / len(stable_values), 6))
+        }
+
+    print("Perfiles entrenados:")
+    for p in profiles.values():
+        print(
+            f"Dispositivo: {p['name']} | "
+            f"Media: {p['mean_flow']} L/min | "
+            f"Std: {p['st_deviation']} | "
+            f"Peso: {p['weight']}"
+        )
+
+    return profiles
+
+
+# -----------------------------------------------------------------------------
+# 4. DESAGREGACIÓN v3.5
+#    Score MAP:
+#      normalized_error + λ*size + γ*change_cost + α*(-log(prob_combo))
+# -----------------------------------------------------------------------------
+def run_disaggregation(
+    df: pd.DataFrame,
+    profiles: Dict,
+    penalty_lambda: float = 0.5,
+    temporal_lambda: float = 0.3,
+    prior_lambda: float = 0.2,
+    max_devices_on: int | None = None,  # recomendado si perfiles crecen
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+
+    if not profiles:
+        raise ValueError("No trained profiles provided.")
+
+    df_proc = preprocess_signal(df)
+    current_flow = df_proc["flow_smooth"].astype(float)
+
+    device_profiles = list(profiles.values())
+    device_names = [p["name"] for p in device_profiles]
+
+    df_result = pd.DataFrame(
+        0.0,
+        index=current_flow.index,
+        columns=device_names
+    )
+
+    # Precomputar combinaciones
+    all_combos = []
+    max_r = len(device_profiles) if max_devices_on is None else min(max_devices_on, len(device_profiles))
+
+    for r in range(1, max_r + 1):
+        for combo in combinations(device_profiles, r):
+            combo_names = [p["name"] for p in combo]
+            combo_sum = float(sum(p["mean_flow"] for p in combo))
+
+            # std promedio con piso
+            combo_std = float(np.mean([max(float(p.get("st_deviation", 0.5)), 0.1) for p in combo]))
+
+            # prob conjunta (producto weights) con piso
+            combo_prob = float(np.prod([max(float(p.get("weight", 0.01)), 0.01) for p in combo]))
+
+            all_combos.append({
+                "names": combo_names,
+                "sum": combo_sum,
+                "std": combo_std,
+                "size": len(combo),
+                "prob": combo_prob
+            })
+
+    prev_combo = None
+
+    for t, flow_t in current_flow.items():
+        y = float(flow_t)
+
+        if y <= 0:
+            prev_combo = None
+            continue
+
+        best_score = np.inf
+        best_combo = None
+
+        for combo in all_combos:
+            if combo["sum"] <= 0:
+                continue
+
+            flow_error = abs(y - combo["sum"])
+
+            # error normalizado por incertidumbre
+            normalized_error = flow_error / combo["std"]
+
+            # penaliza combos grandes
+            complexity_penalty = penalty_lambda * combo["size"]
+
+            # penaliza cambios (coste proporcional a #cambios)
+            temporal_penalty = 0.0
+            if prev_combo is not None:
+                change_cost = len(set(combo["names"]).symmetric_difference(set(prev_combo)))
+                temporal_penalty = temporal_lambda * change_cost
+
+            # prior bayesiano suave (combinaciones raras => más penalización)
+            prior_penalty = prior_lambda * (-np.log(combo["prob"]))
+
+            score = normalized_error + complexity_penalty + temporal_penalty + prior_penalty
+
+            if score < best_score:
+                best_score = score
+                best_combo = combo
+
+        if best_combo is None:
+            continue
+
+        # Distribución proporcional exacta (conservación por timestamp)
+        for name in best_combo["names"]:
+            mean_i = next(p["mean_flow"] for p in device_profiles if p["name"] == name)
+            assigned_value = y * (mean_i / best_combo["sum"])
+            df_result.at[t, name] = assigned_value
+
+        prev_combo = best_combo["names"]
+
+    # ===============================
+    # Auditoría de conservación
+    # ===============================
+    total_original_liters = float(current_flow.sum() / 60.0)
+    total_assigned_liters = float(df_result.sum().sum() / 60.0)
+    diff = total_original_liters - total_assigned_liters
+
+    print(f"[AUDIT] Total original litros: {total_original_liters:.4f}")
+    print(f"[AUDIT] Total asignado litros: {total_assigned_liters:.4f}")
+    print(f"[AUDIT] Diferencia: {diff:.6f}")
+
+    # ===============================
+    # Construcción de eventos
+    # ===============================
+    events_list = []
+
+    for col in device_names:
+        is_active = df_result[col] > 0
+        changes = is_active.astype(int).diff()
+
+        starts = df_result.index[changes == 1]
+        ends = df_result.index[changes == -1]
+
+        if len(is_active) > 0 and bool(is_active.iloc[0]):
+            starts = starts.insert(0, df_result.index[0])
+
+        if len(ends) < len(starts):
+            ends = ends.append(pd.Index([df_result.index[-1]]))
+
+        for s, e in zip(starts, ends):
+            duration = (e - s).total_seconds()
+            if duration < 2:
+                continue
+
+            segment = df_result.loc[s:e, col]
+            volume_liters = float(segment.sum() / 60.0)
+            avg_flow = float(segment.mean())
+
+            events_list.append({
+                "device": col,
+                "start_time": s,
+                "end_time": e,
+                "duration_seconds": float(duration),
+                "flow_rate": float(avg_flow),
+                "volume_liters": float(volume_liters)
+            })
+
+    df_events = pd.DataFrame(events_list)
+
+    total_events_liters = float(df_events["volume_liters"].sum()) if not df_events.empty else 0.0
+    print(f"[AUDIT] Total litros en eventos: {total_events_liters:.4f}")
+    print(f"[AUDIT] Error final: {(total_original_liters - total_events_liters):.6f}")
+
+    return df_events, df_result

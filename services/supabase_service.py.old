@@ -1,0 +1,193 @@
+from typing import Optional, Dict, Any
+from supabase import create_client, Client
+import pandas as pd
+import os
+
+_supabase: Optional[Client] = None
+
+def get_supabase() -> Client:
+    global _supabase
+    if _supabase is None:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+
+        if not url or not key:
+            raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY")
+
+        _supabase = create_client(url, key)
+
+    return _supabase
+
+def fetch_measurements(place_id: int, start_time: str, end_time: str, batch_size: int = 10000):
+    sb = get_supabase()
+
+    all_rows = []
+    current_start = start_time
+
+    while True:
+        query = (
+            sb.table("measurements_realtime")
+            .select("*")
+            .eq("place_id", place_id)
+            .gte("timestamp", current_start)
+            .lte("timestamp", end_time)
+            .order("timestamp")
+            .limit(batch_size)
+        )
+
+        response = query.execute()
+        rows = response.data
+
+        if not rows:
+            break
+
+        all_rows.extend(rows)
+
+        if len(rows) < batch_size:
+            break
+
+        # siguiente batch empieza desde el último timestamp
+        current_start = rows[-1]["timestamp"]
+
+    if not all_rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_rows)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp")
+
+    return df
+
+
+
+# Agregar al inicio las importaciones si faltan
+from typing import List, Dict, Any
+
+# --- NUEVA FUNCIÓN ---
+def get_official_profiles(place_id: int) -> List[Dict[str, Any]]:
+    """Obtiene solo los perfiles marcados como oficiales para congelar la detección."""
+    sb = get_supabase()
+    res = sb.table("disaggregation_profiles")\
+        .select("*")\
+        .eq("place_id", place_id)\
+        .eq("is_official", True)\
+        .execute()
+    return res.data if res.data else []
+
+# --- NUEVA FUNCIÓN ---
+def save_official_profiles(place_id: int, profiles: Dict[int, Dict]):
+    """Guarda perfiles marcándolos como oficiales (Training Mode)."""
+    sb = get_supabase()
+    
+    # 1. Borrar oficiales anteriores para evitar mezclas
+    sb.table("disaggregation_profiles")\
+        .delete()\
+        .eq("place_id", place_id)\
+        .eq("is_official", True)\
+        .execute()
+        
+    records = []
+    for _, info in profiles.items():
+        records.append({
+            "place_id": place_id,
+            "name": info["name"],
+            "mean_flow": info["mean_flow"],
+            "st_deviation": info["st_deviation"],
+            "weight": info["weight"],
+            "is_official": True
+        })
+    
+    if records:
+        sb.table("disaggregation_profiles").insert(records).execute()
+
+
+def save_disaggregation_result(place_id, df_events, df_result):
+    sb = get_supabase()
+
+    if df_events.empty:
+        print(f"[Disaggregation] place_id={place_id} No events to save.")
+        return
+
+    event_records = []
+
+    for _, row in df_events.iterrows():
+        event_records.append({
+            "place_id": place_id,
+            "device_name": row["device"],
+            "start_time": row["start_time"].isoformat(),
+            "end_time": row["end_time"].isoformat(),
+            "duration_s": float(row["duration_seconds"]),
+            "flow_rate": float(row["flow_rate"]),
+        })
+
+    sb.table("disaggregation_events").upsert(event_records, on_conflict="place_id,device_name,start_time,end_time").execute()
+
+    print(f"[Disaggregation] place_id={place_id} Saved events={len(event_records)}")
+
+
+def get_all_places():
+    sb = get_supabase()
+    result = sb.table("places").select("*").execute()
+    return result.data or []
+
+def bulk_insert_dissagregated(data: list) -> None:
+    if not data:
+        return
+    sb = get_supabase()
+    try:
+        batch_size = 1000
+        for i in range(0, len(data), batch_size):
+            batch = data[i:i + batch_size]
+            sb.table("disaggregated_readings").upsert(batch, on_conflict="place_id,time_bucket,category").execute()
+    except Exception as e:
+        print(f"[Supabase Error] Bulk insert failed: {e}")
+
+def get_stackplot_data(place_id: int | str, start_time: Optional[str] = None, end_time: Optional[str] = None, granularity: str = "day") -> pd.DataFrame:
+
+    sb = get_supabase()
+
+    query = (
+        sb.table("disaggregated_readings")
+        .select("time_bucket, category, volume_liters")
+        .eq("place_id", place_id)
+    )
+
+    if start_time:
+        query = query.gte("time_bucket", start_time)
+
+    if end_time:
+        query = query.lte("time_bucket", end_time)
+
+    response = query.order("time_bucket").execute()
+    data = response.data
+
+    if not data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data)
+
+ 
+    df["time_bucket"] = pd.to_datetime(df["time_bucket"], utc=True)
+
+
+    df_pivot = (
+        df.pivot_table(index="time_bucket", columns="category", values="volume_liters", aggfunc="sum"
+        )
+        .fillna(0)
+    )
+
+    freq_map = {
+        "hour": "h",
+        "day": "D",
+        "week": "W",
+        "month": "ME"
+    }
+
+    freq = freq_map.get(granularity, "D")
+
+    df_resampled = df_pivot.resample(freq).sum()
+
+    total_by_device = df_resampled.sum().sort_values(ascending=False)
+    df_resampled = df_resampled[total_by_device.index]
+
+    return df_resampled
