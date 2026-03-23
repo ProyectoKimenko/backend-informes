@@ -9,7 +9,6 @@ from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta, timezone
-import calendar
 import colorsys
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -24,13 +23,15 @@ from src.analysis import analyze_data, analyze_data_from_df
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
-from pydantic import BaseModel
-from worker.tasks import process_disaggregation, train_model
+from pydantic import BaseModel, field_validator
+from worker.tasks import process_disaggregation, train_and_refresh_disaggregation
 from services.redis_client import redis_client as redis
 from services.supabase_service import get_stackplot_data
 import json
 from celery.result import AsyncResult
 from worker.celery_app import celery_app
+from services.supabase_service import get_supabase
+
 # Configuración de logging centralizada
 logger = setup_logger(__name__)
 
@@ -48,6 +49,21 @@ class DisaggregationRequest(BaseModel):
     place_id: int
     start_time: str | None = None
     end_time: str | None = None
+class TrainingWorkflowRequest(BaseModel):
+    place_id: int
+    start_time: str
+    end_time: str
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_iso_datetime(cls, value: str) -> str:
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception as exc:
+            raise ValueError("start_time/end_time deben estar en formato ISO-8601") from exc
+        return value
+class UpdateDisaggregationProfileLabelRequest(BaseModel):
+    label: Optional[str] = None
 
 DATASETS = {}
 templates = Jinja2Templates(directory="templates")
@@ -1006,9 +1022,80 @@ async def get_stackplot(place_id: int, start_date: str, end_date: str, granulari
         log_error(logger, "fetching stackplot data", e)
         raise HTTPException(status_code=500, detail=f"Error fetching stackplot data: {str(e)}")
 @app.post("/api/disaggregate/train")
-def trigger_training(req: DisaggregationRequest):
-    end_time = req.end_time or datetime.now().isoformat()
-    start_time = req.start_time or (datetime.now() -timedelta(days=7)).isoformat()
+def trigger_training(req: TrainingWorkflowRequest):
+    try:
+        start_dt = datetime.fromisoformat(req.start_time.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(req.end_time.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fechas inválidas")
 
-    task = train_model.delay(req.place_id, start_time, end_time)
-    return {"task_id": task.id, "status": "Training started"}
+    if end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail="end_time debe ser mayor que start_time")
+
+    task = train_and_refresh_disaggregation.delay(
+        req.place_id,
+        req.start_time,
+        req.end_time,
+    )
+
+    return {
+        "task_id": task.id,
+        "status": "queued",
+        "place_id": req.place_id,
+        "message": "Training + disaggregation refresh started",
+    }
+@app.get("/api/places/{place_id}/available-dates")
+def get_available_dates(place_id: int, year: int, month: int):
+    sb = get_supabase()
+    res = sb.rpc("get_available_days", {
+        "p_place_id": place_id,
+        "p_year": year,
+        "p_month": month,
+    }).execute()
+
+    print("place_id:", place_id, "year:", year, "month:", month)
+    print("rpc data:", res.data)
+
+    return {
+        "available_days": [r["day"] for r in (res.data or [])]
+    }
+@app.get("/api/places/{place_id}/disaggregation-profiles")
+def get_disaggregation_profiles(place_id: int):
+    sb = get_supabase()
+
+    response = (
+        sb.table("disaggregation_profiles")
+        .select("id, place_id, name, label")
+        .eq("place_id", place_id)
+        .order("name")
+        .execute()
+    )
+
+    return {
+        "profiles": response.data or []
+    }
+@app.patch("/api/disaggregation-profiles/{profile_id}/label")
+def update_disaggregation_profile_label(
+    profile_id: int,
+    req: UpdateDisaggregationProfileLabelRequest,
+):
+    sb = get_supabase()
+
+    label = req.label.strip() if isinstance(req.label, str) else None
+    if label == "":
+        label = None
+
+    response = (
+        sb.table("disaggregation_profiles")
+        .update({"label": label})
+        .eq("id", profile_id)
+        .execute()
+    )
+
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    return {
+        "success": True,
+        "profile": response.data[0],
+    }

@@ -13,3 +13,4 @@ celery
 redis
 python-multipart
 pydantic
+joblib>=1.3

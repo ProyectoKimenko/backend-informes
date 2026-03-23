@@ -10,7 +10,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
       - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
-
+      - PYTHONPATH=/app
     depends_on:
       - redis
       - worker
@@ -23,6 +23,7 @@ services:
     command: celery -A worker.celery_app worker --loglevel=info
     volumes:
       - .:/app
+      - scalers_data:/app/scalers   # volumen persistente para los scalers
     depends_on:
       - redis
     environment:
@@ -30,32 +31,38 @@ services:
       - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/app
+      - SCALER_DIR=/app/scalers     # ruta dentro del contenedor
     networks:
       - kimenko
+
   beat:
     build: .
     command: celery -A worker.celery_app beat --loglevel=info
     volumes:
       - .:/app
+    depends_on:
+      - redis
+      - worker
     environment:
       - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
       - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
       - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
-      - worker
+      - PYTHONPATH=/app
     networks:
       - kimenko
-    # 4. Redis (Cola de mensajes)
+
   redis:
     image: redis:7-alpine
     container_name: kimenko-redis
     volumes:
-    - redis_data:/data
+      - redis_data:/data
     networks:
       - kimenko
+
 volumes:
   redis_data:
+  scalers_data:    # volumen Docker gestionado — persiste entre reinicios del contenedor
+
 networks:
   kimenko:
     external: true

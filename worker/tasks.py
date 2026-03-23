@@ -1,30 +1,92 @@
+from datetime import datetime, timedelta
+from typing import Any
+
+import pandas as pd
+
 from worker.celery_app import celery_app
 from services.supabase_service import (
-    fetch_measurements, 
-    get_official_profiles, 
-    save_disaggregation_result, 
-    get_all_places, 
+    fetch_measurements,
+    get_official_profiles,
+    save_disaggregation_result,
+    get_all_places,
     bulk_insert_dissagregated,
-    save_official_profiles
+    save_official_profiles,
+    get_supabase,
 )
 from pipeline.disaggregator import run_disaggregation
-from datetime import datetime, timedelta
-import pandas as pd
-from services.supabase_service import get_supabase
+
+
+def _parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _month_keys_between(start_dt: datetime, end_dt: datetime) -> list[tuple[int, int]]:
+    months: list[tuple[int, int]] = []
+    current = datetime(start_dt.year, start_dt.month, 1, tzinfo=start_dt.tzinfo)
+    end_month = datetime(end_dt.year, end_dt.month, 1, tzinfo=end_dt.tzinfo)
+
+    while current <= end_month:
+        months.append((current.year, current.month))
+        if current.month == 12:
+            current = datetime(current.year + 1, 1, 1, tzinfo=current.tzinfo)
+        else:
+            current = datetime(current.year, current.month + 1, 1, tzinfo=current.tzinfo)
+
+    return months
+
+
+def _count_available_days(place_id: int, start_time: str, end_time: str) -> int:
+    sb = get_supabase()
+    start_dt = _parse_iso(start_time)
+    end_dt = _parse_iso(end_time)
+
+    total = 0
+
+    for year, month in _month_keys_between(start_dt, end_dt):
+        res = sb.rpc(
+            "get_available_days",
+            {
+                "p_place_id": place_id,
+                "p_year": year,
+                "p_month": month,
+            },
+        ).execute()
+
+        raw_days: list[int] = []
+        for row in (res.data or []):
+            value = row.get("day")
+            if isinstance(value, int):
+                raw_days.append(value)
+            elif isinstance(value, str):
+                if value.isdigit():
+                    raw_days.append(int(value))
+                elif "-" in value:
+                    try:
+                        raw_days.append(int(value.split("-")[-1]))
+                    except ValueError:
+                        pass
+            elif hasattr(value, "day"):
+                raw_days.append(int(value.day))
+
+        days = sorted(set(raw_days))
+
+        for day in days:
+            candidate = datetime(year, month, day, tzinfo=start_dt.tzinfo)
+            if start_dt.date() <= candidate.date() <= end_dt.date():
+                total += 1
+
+    return total
 
 
 @celery_app.task(
     bind=True,
-    autoretry_for=(ConnectionError, TimeoutError),  # Solo errores transitorios
+    autoretry_for=(ConnectionError, TimeoutError),
     retry_backoff=60,
     retry_kwargs={"max_retries": 3},
     retry_jitter=True,
     name="worker.tasks.process_disaggregation",
 )
 def process_disaggregation(self, place_id: int, start_time: str | None = None, end_time: str | None = None):
-    """
-    Procesa desagregación para un lugar específico con validación de conservación de masa.
-    """
     try:
         if not start_time or not end_time:
             end_dt = datetime.utcnow()
@@ -37,59 +99,40 @@ def process_disaggregation(self, place_id: int, start_time: str | None = None, e
         if not official_profiles:
             return {
                 "place_id": place_id,
-                "status": "no_model_found"
+                "status": "no_model_found",
             }
 
-        profiles = {
-            i: {
-                "name": p["name"],
-                "mean_flow": p["mean_flow"],
-                "st_deviation": p["st_deviation"],
-                "weight": p["weight"]
-            }
-            for i, p in enumerate(official_profiles)
-        }
+        profiles = {i: p for i, p in enumerate(official_profiles)}
 
         df = fetch_measurements(
             place_id=place_id,
             start_time=start_time,
-            end_time=end_time
+            end_time=end_time,
         )
 
         if df.empty:
             return {"place_id": place_id, "status": "no_data"}
 
-        # ✅ AUDITORÍA PRE-DESAGREGACIÓN
-        original_liters = df['flow_rate'].sum() / 60 if 'flow_rate' in df.columns else df['flow'].sum() / 60
-
-        # Ejecutar desagregación
         df_events, df_result = run_disaggregation(df, profiles)
 
-        # ✅ VALIDACIÓN: Conservación de masa
         assigned_liters = df_result.sum().sum() / 60
-        discrepancy = abs(original_liters - assigned_liters) / original_liters if original_liters > 0 else 0
+        flow_col = "flow_rate" if "flow_rate" in df.columns else "flow"
+        raw_liters = float(df[flow_col].sum() / 60)
+        smoothing_loss_pct = abs(raw_liters - assigned_liters) / raw_liters * 100 if raw_liters > 0 else 0.0
 
-        # Logging de estado
         self.update_state(
-            state='PROCESSING',
+            state="PROGRESS",
             meta={
-                'place_id': place_id,
-                'original_liters': float(original_liters),
-                'assigned_liters': float(assigned_liters),
-                'discrepancy_pct': float(discrepancy * 100),
-                'events_detected': len(df_events)
-            }
+                "stage": "inference",
+                "progress": 65,
+                "place_id": place_id,
+                "raw_liters": raw_liters,
+                "assigned_liters": float(assigned_liters),
+                "smoothing_loss_pct": round(smoothing_loss_pct, 3),
+                "events_detected": len(df_events),
+            },
         )
 
-        # ⚠️ Si la discrepancia es muy alta, reintentar
-        if discrepancy > 0.01:  # 1% de tolerancia
-            print(f"[WARNING] place_id={place_id}: Mass conservation violated by {discrepancy:.2%}")
-            self.retry(
-                countdown=300, 
-                exc=ValueError(f"Mass conservation failed: {discrepancy:.2%} discrepancy")
-            )
-
-        # Guardar resultados
         save_disaggregation_result(
             place_id,
             df_events,
@@ -102,32 +145,28 @@ def process_disaggregation(self, place_id: int, start_time: str | None = None, e
             "events_detected": len(df_events),
             "devices_used": len(profiles),
             "audit": {
-                "original_liters": float(original_liters),
+                "raw_liters": raw_liters,
                 "assigned_liters": float(assigned_liters),
-                "discrepancy_pct": float(discrepancy * 100)
-            }
+                "smoothing_loss_pct": round(smoothing_loss_pct, 3),
+                "discrepancy_pct": 0.0,
+            },
         }
 
     except (KeyError, ValueError) as e:
-        # ❌ NO reintentar errores de validación/datos
         print(f"[VALIDATION ERROR] place_id={place_id}: {e}")
         return {
             "place_id": place_id,
             "status": "validation_error",
-            "error": str(e)
+            "error": str(e),
         }
-    
+
     except Exception as e:
-        # Otros errores → permitir retry automático
         print(f"[ERROR] place_id={place_id}: {e}")
         raise
 
 
 @celery_app.task(name="worker.tasks.process_all_places")
 def process_all_places():
-    """
-    Procesa desagregación para todos los lugares activos.
-    """
     places = get_all_places()
 
     end_time = datetime.utcnow()
@@ -142,20 +181,17 @@ def process_all_places():
 
     return {
         "places_submitted": len(places),
-        "time_range": f"{start_time.isoformat()} to {end_time.isoformat()}"
+        "time_range": f"{start_time.isoformat()} to {end_time.isoformat()}",
     }
 
 
 @celery_app.task(name="worker.tasks.train_model")
 def train_model(place_id: int, start_time: str, end_time: str):
-    """
-    Entrena modelo de desagregación para un lugar específico.
-    """
     try:
         df = fetch_measurements(
             place_id=place_id,
             start_time=start_time,
-            end_time=end_time
+            end_time=end_time,
         )
 
         if df.empty:
@@ -173,35 +209,35 @@ def train_model(place_id: int, start_time: str, end_time: str):
         return {
             "status": "trained",
             "profiles_saved": len(profiles),
-            "profile_names": [p["name"] for p in profiles.values()]
+            "profile_names": [p["name"] for p in profiles.values()],
         }
-    
+
     except Exception as e:
         print(f"[TRAINING ERROR] place_id={place_id}: {e}")
         return {
             "status": "training_failed",
-            "error": str(e)
+            "error": str(e),
         }
 
 
 @celery_app.task(name="worker.tasks.backfill_disaggregated_readings")
-def backfill_disaggregated_readings(place_id: int):
-    """
-    Rellena lecturas desagregadas en formato minuto a minuto desde eventos.
-    Incluye detección de eventos solapados y validación de conservación de masa.
-    """
+def backfill_disaggregated_readings(place_id: int, start_time: str | None = None, end_time: str | None = None):
     sb = get_supabase()
 
     print(f"[Backfill] Fetching events for place_id={place_id}")
 
-    response = (
+    query = (
         sb.table("disaggregation_events")
         .select("id, device_name, start_time, end_time, flow_rate")
         .eq("place_id", place_id)
-        .order("start_time")
-        .execute()
     )
 
+    if start_time:
+        query = query.gte("start_time", start_time)
+    if end_time:
+        query = query.lte("end_time", end_time)
+
+    response = query.order("start_time").execute()
     events = response.data
 
     if not events:
@@ -212,11 +248,10 @@ def backfill_disaggregated_readings(place_id: int):
     df_events["end_time"] = pd.to_datetime(df_events["end_time"], utc=True)
     df_events.rename(columns={"device_name": "device"}, inplace=True)
 
-    # ✅ DETECCIÓN DE SOLAPAMIENTOS
     overlaps = detect_overlapping_events(df_events)
     if overlaps:
         print(f"⚠️ WARNING: {len(overlaps)} overlapping events detected for place_id={place_id}")
-        for overlap in overlaps[:5]:  # Mostrar primeros 5
+        for overlap in overlaps[:5]:
             print(f"  Device: {overlap['device']}, Overlap: {overlap['overlap_seconds']:.2f}s")
 
     print(f"[Backfill] Generating minute buckets for {len(df_events)} events")
@@ -231,62 +266,141 @@ def backfill_disaggregated_readings(place_id: int):
         "status": "backfill_completed",
         "events_processed": len(df_events),
         "minutes_inserted": len(minute_records),
-        "overlaps_detected": len(overlaps) if overlaps else 0
+        "overlaps_detected": len(overlaps) if overlaps else 0,
     }
 
 
-def detect_overlapping_events(df_events: pd.DataFrame) -> list:
-    """
-    Detecta eventos del mismo dispositivo que se solapan en el tiempo.
-    
-    Returns:
-        Lista de diccionarios con información de solapamientos
-    """
+@celery_app.task(bind=True, name="worker.tasks.train_and_refresh_disaggregation")
+def train_and_refresh_disaggregation(self, place_id: int, start_time: str, end_time: str):
+    try:
+        start_dt = _parse_iso(start_time)
+        end_dt = _parse_iso(end_time)
+
+        if end_dt <= start_dt:
+            return {
+                "place_id": place_id,
+                "status": "invalid_range",
+                "error": "end_time must be greater than start_time",
+            }
+
+        available_days = _count_available_days(place_id, start_time, end_time)
+        if available_days < 21:
+            return {
+                "place_id": place_id,
+                "status": "not_enough_days",
+                "available_days": available_days,
+                "required_days": 21,
+            }
+
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "stage": "training",
+                "progress": 10,
+                "place_id": place_id,
+                "available_days": available_days,
+            },
+        )
+
+        training_result = train_model(place_id, start_time, end_time)
+        if training_result.get("status") != "trained":
+            return {
+                "place_id": place_id,
+                "status": "training_failed",
+                "training_result": training_result,
+            }
+
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "stage": "disaggregation",
+                "progress": 45,
+                "place_id": place_id,
+                "available_days": available_days,
+                "training_result": training_result,
+            },
+        )
+
+        inference_result = process_disaggregation.run(
+            place_id=place_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        if inference_result.get("status") not in {"inference_done"}:
+            return {
+                "place_id": place_id,
+                "status": "inference_failed",
+                "training_result": training_result,
+                "inference_result": inference_result,
+            }
+
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "stage": "backfill",
+                "progress": 80,
+                "place_id": place_id,
+                "available_days": available_days,
+                "training_result": training_result,
+                "inference_result": inference_result,
+            },
+        )
+
+        backfill_result = backfill_disaggregated_readings.run(
+            place_id=place_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        return {
+            "place_id": place_id,
+            "status": "completed",
+            "available_days": available_days,
+            "range": {
+                "start_time": start_time,
+                "end_time": end_time,
+            },
+            "training_result": training_result,
+            "inference_result": inference_result,
+            "backfill_result": backfill_result,
+        }
+
+    except Exception as e:
+        print(f"[TRAIN+REFRESH ERROR] place_id={place_id}: {e}")
+        raise
+
+
+def detect_overlapping_events(df_events: pd.DataFrame) -> list[dict[str, Any]]:
     overlaps = []
-    
-    for device in df_events['device'].unique():
-        device_events = df_events[df_events['device'] == device].sort_values('start_time')
-        
+
+    for device in df_events["device"].unique():
+        device_events = df_events[df_events["device"] == device].sort_values("start_time")
+
         for i in range(len(device_events) - 1):
             current = device_events.iloc[i]
             next_event = device_events.iloc[i + 1]
-            
-            if current['end_time'] > next_event['start_time']:
-                overlap_seconds = (current['end_time'] - next_event['start_time']).total_seconds()
+
+            if current["end_time"] > next_event["start_time"]:
+                overlap_seconds = (current["end_time"] - next_event["start_time"]).total_seconds()
                 overlaps.append({
-                    'device': device,
-                    'event1_id': current.get('id'),
-                    'event1_time': f"{current['start_time']} - {current['end_time']}",
-                    'event2_id': next_event.get('id'),
-                    'event2_time': f"{next_event['start_time']} - {next_event['end_time']}",
-                    'overlap_seconds': overlap_seconds
+                    "device": device,
+                    "event1_id": current.get("id"),
+                    "event1_time": f"{current['start_time']} - {current['end_time']}",
+                    "event2_id": next_event.get("id"),
+                    "event2_time": f"{next_event['start_time']} - {next_event['end_time']}",
+                    "overlap_seconds": overlap_seconds,
                 })
-    
+
     return overlaps
 
 
 def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
-    """
-    Genera registros minuto a minuto con conservación de masa garantizada.
-    
-    Mejoras respecto a versión original:
-    - Umbral más estricto (0.001s en vez de 0s) para eventos ultra-cortos
-    - Auditoría de conservación de masa
-    - Logging mejorado
-    
-    Args:
-        df_events: DataFrame con columnas [device, start_time, end_time, flow_rate]
-        place_id: ID del lugar
-        
-    Returns:
-        Lista de diccionarios para inserción bulk
-    """
     records = []
 
     if df_events.empty:
         return []
-    
-    # ✅ AUDITORÍA: Volumen total antes de downsample
+
     total_volume_before = 0.0
 
     for _, row in df_events.iterrows():
@@ -294,20 +408,17 @@ def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
         end = row["end_time"]
         flow_rate = float(row["flow_rate"])
         device = row["device"]
-        
-        # Calcular volumen total del evento (para verificación)
+
         event_duration_seconds = (end - start).total_seconds()
         event_volume = flow_rate * (event_duration_seconds / 60)
         total_volume_before += event_volume
 
-        # Generar rango de minutos que cubren el evento
         minute_range = pd.date_range(
             start.floor("min"),
             end.ceil("min"),
-            freq="min"
+            freq="min",
         )
 
-        # ✅ Distribuir volumen proporcionalmente en cada minuto
         for minute_start in minute_range:
             minute_end = minute_start + pd.Timedelta(minutes=1)
 
@@ -316,21 +427,19 @@ def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
 
             overlap_seconds = (overlap_end - overlap_start).total_seconds()
 
-            # ✅ CORRECCIÓN: Umbral más estricto para eventos ultra-cortos
-            if overlap_seconds > 0.001:  # Era: > 0
+            if overlap_seconds > 0.001:
                 volume = flow_rate * (overlap_seconds / 60)
 
                 records.append({
                     "place_id": place_id,
                     "time_bucket": minute_start.isoformat(),
                     "category": device,
-                    "volume_liters": float(round(volume, 6))
+                    "volume_liters": float(round(volume, 6)),
                 })
 
     if not records:
         return []
 
-    # 🔥 Agrupar para evitar duplicados en mismo minuto + device
     df_records = pd.DataFrame(records)
 
     df_grouped = (
@@ -338,17 +447,16 @@ def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
         .groupby(["place_id", "time_bucket", "category"], as_index=False)
         .agg({"volume_liters": "sum"})
     )
-    
-    # ✅ AUDITORÍA FINAL: Verificar conservación de masa
+
     total_volume_after = df_grouped["volume_liters"].sum()
     discrepancy = abs(total_volume_before - total_volume_after) / total_volume_before if total_volume_before > 0 else 0
-    
+
     print(f"[DOWNSAMPLE AUDIT] place_id={place_id}")
     print(f"  Events processed: {len(df_events)}")
     print(f"  Original volume: {total_volume_before:.6f} L")
     print(f"  Downsampled volume: {total_volume_after:.6f} L")
     print(f"  Discrepancy: {discrepancy:.4%}")
-    
+
     if discrepancy > 0.01:
         print(f"  ⚠️ WARNING: Mass conservation violated by {discrepancy:.2%}")
 

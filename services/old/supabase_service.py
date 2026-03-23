@@ -23,68 +23,77 @@ def get_supabase() -> Client:
 
 def fetch_measurements(place_id: int, start_time: str, end_time: str, batch_size: int = 10000) -> pd.DataFrame:
     """
-    Obtiene mediciones usando paginación por offset (más robusta que por cursor).
-
-    La paginación anterior usaba el último timestamp como cursor, lo que causaba
-    cortes prematuros cuando el filtro de deduplicación reducía el batch por debajo
-    de batch_size — el loop interpretaba eso como "no hay más datos" aunque hubiera
-    decenas de miles de filas restantes.
-
-    La paginación por offset (range) no tiene ese problema: itera en bloques fijos
-    independientemente del contenido, y termina solo cuando Supabase devuelve 0 filas.
-
+    Obtiene mediciones con paginación robusta que evita duplicados.
+    
+    Correcciones:
+    - Exclusión explícita del último timestamp procesado
+    - Validación de timestamps
+    - Eliminación de duplicados
+    
     Args:
         place_id: ID del lugar
         start_time: Timestamp inicial (ISO format)
         end_time: Timestamp final (ISO format)
-        batch_size: Tamaño de lote por request
-
+        batch_size: Tamaño de lote para paginación
+        
     Returns:
         DataFrame con columnas [timestamp, flow_rate, place_id, ...]
-        con timestamps únicos, ordenado ascendente.
     """
     sb = get_supabase()
 
     all_rows = []
-    offset = 0
+    current_start = start_time
+    last_timestamp = None
 
     while True:
-        response = (
+        query = (
             sb.table("measurements_realtime")
             .select("*")
             .eq("place_id", place_id)
-            .gte("timestamp", start_time)
+            .gte("timestamp", current_start)
             .lte("timestamp", end_time)
             .order("timestamp")
-            .range(offset, offset + batch_size - 1)
-            .execute()
+            .limit(batch_size)
         )
 
+        response = query.execute()
         rows = response.data
 
         if not rows:
             break
 
-        all_rows.extend(rows)
-        print(f"[fetch] place_id={place_id} offset={offset} filas={len(rows)} acumulado={len(all_rows)}")
+        # ✅ CORRECCIÓN: Filtrar duplicados del límite anterior
+        if last_timestamp:
+            rows = [r for r in rows if r["timestamp"] > last_timestamp]
+        
+        if not rows:
+            break
 
-        # Si devolvió menos del batch completo no hay más páginas
+        all_rows.extend(rows)
+
+        # ✅ Si obtuvimos menos del batch_size, terminamos
         if len(rows) < batch_size:
             break
 
-        offset += batch_size
+        # ✅ Actualizar para siguiente iteración
+        last_timestamp = rows[-1]["timestamp"]
+        current_start = last_timestamp
 
     if not all_rows:
         return pd.DataFrame()
 
     df = pd.DataFrame(all_rows)
-
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-    df = df.dropna(subset=["timestamp"])
-    df = df.drop_duplicates(subset=["timestamp", "place_id"])
-    df = df.sort_values("timestamp").reset_index(drop=True)
-
-    print(f"[fetch] place_id={place_id} total={len(df)} filas únicas | {df['timestamp'].min()} → {df['timestamp'].max()}")
+    
+    # ✅ Conversión robusta de timestamps
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors='coerce')
+    
+    # ✅ Eliminar registros con timestamps inválidos
+    df = df.dropna(subset=['timestamp'])
+    
+    # ✅ Eliminar duplicados explícitos (por si acaso)
+    df = df.drop_duplicates(subset=['timestamp', 'place_id'])
+    
+    df = df.sort_values("timestamp")
 
     return df
 
@@ -117,186 +126,112 @@ def get_official_profiles(place_id: int) -> List[Dict[str, Any]]:
 
 def save_official_profiles(place_id: int, profiles: Dict[int, Dict]) -> None:
     """
-    Guarda perfiles marcándolos como oficiales.
-
-    Compatible con perfiles v1, v2 y v3. Siempre incluye tol (NOT NULL en DB).
-    Los campos v3 (tol_nd, centroid_nd, scaler_path, mean_duration, label)
-    se escriben solo si están presentes en el perfil.
-
+    Guarda perfiles marcándolos como oficiales (Training Mode).
+    
+    Mejoras:
+    - Validación previa de datos
+    - Manejo robusto de errores
+    - Logging detallado
+    
     Args:
         place_id: ID del lugar
-        profiles: Diccionario {id: {name, mean_flow, st_deviation, weight, tol?, ...}}
+        profiles: Diccionario de perfiles {id: {name, mean_flow, st_deviation, weight}}
     """
     sb = get_supabase()
-
+    
+    # ✅ Validar perfiles antes de tocar la DB
     if not profiles:
         raise ValueError("No profiles to save")
-
+    
     records = []
     for _, info in profiles.items():
+        # Validación de campos requeridos
         required_fields = ["name", "mean_flow", "st_deviation", "weight"]
         if not all(k in info for k in required_fields):
             raise ValueError(f"Invalid profile format. Missing fields in: {info}")
-
-        mean_flow = float(info["mean_flow"])
-
-        # tol siempre presente — fallback a 30% del mean_flow si no viene calculado
-        tol = float(info["tol"]) if info.get("tol") is not None else float(max(1.0, mean_flow * 0.30))
-
-        record: Dict[str, Any] = {
-            "place_id":     place_id,
-            "name":         info["name"],
-            "label":        info.get("label") or None,
-            "mean_flow":    mean_flow,
+        
+        records.append({
+            "place_id": place_id,
+            "name": info["name"],
+            "mean_flow": float(info["mean_flow"]),
             "st_deviation": float(info["st_deviation"]),
-            "weight":       float(info["weight"]),
-            "tol":          tol,
-            "is_official":  True,
-        }
-
-        # Campos v3 — solo si están presentes
-        if info.get("mean_duration") is not None:
-            record["mean_duration"] = float(info["mean_duration"])
-        if info.get("tol_nd") is not None:
-            record["tol_nd"] = float(info["tol_nd"])
-        if info.get("centroid_nd"):
-            record["centroid_nd"] = [float(v) for v in info["centroid_nd"]]
-        if info.get("scaler_path"):
-            record["scaler_path"] = str(info["scaler_path"])
-
-        records.append(record)
-
+            "weight": float(info["weight"]),
+            "is_official": True
+        })
+    
     try:
-        delete_response = sb.table("disaggregation_profiles") \
-            .delete() \
-            .eq("place_id", place_id) \
-            .eq("is_official", True) \
+        # ✅ Borrar oficiales anteriores
+        delete_response = sb.table("disaggregation_profiles")\
+            .delete()\
+            .eq("place_id", place_id)\
+            .eq("is_official", True)\
             .execute()
-
-        deleted = len(delete_response.data) if delete_response.data else 0
-        print(f"[Profiles] Deleted {deleted} old profiles for place_id={place_id}")
-
-        sb.table("disaggregation_profiles").insert(records).execute()
-
-        labeled = sum(1 for r in records if r.get("label"))
-        has_nd  = sum(1 for r in records if r.get("tol_nd") is not None)
-        print(
-            f"[Profiles] place_id={place_id} — saved {len(records)} profiles "
-            f"({labeled} labeled, {has_nd} with ND clustering)"
-        )
-
+        
+        print(f"[Profiles] Deleted {len(delete_response.data) if delete_response.data else 0} old profiles")
+        
+        # ✅ Insertar nuevos
+        insert_response = sb.table("disaggregation_profiles").insert(records).execute()
+        
+        print(f"[Profiles] place_id={place_id} Saved {len(records)} official profiles")
+        
     except Exception as e:
         print(f"[ERROR] Failed to save profiles for place_id={place_id}: {e}")
         raise
 
 
-def _build_no_detected_events(
-    place_id: int,
-    df_result: pd.DataFrame,
-    min_volume_l: float = 0.02,
-    min_duration_s: float = 5.0,
-) -> List[Dict]:
+def save_disaggregation_result(place_id: int, df_events: pd.DataFrame, df_result: pd.DataFrame) -> None:
     """
-    Construye eventos de No Detectado desde el residual de df_result.
-    """
-    if "No Detectado" not in df_result.columns:
-        return []
-
-    no_det    = df_result["No Detectado"]
-    is_active = no_det > 0.05
-    changes   = is_active.astype(int).diff()
-
-    starts = df_result.index[changes == 1]
-    ends   = df_result.index[changes == -1]
-
-    if len(is_active) > 0 and bool(is_active.iloc[0]):
-        starts = starts.insert(0, df_result.index[0])
-    if len(ends) < len(starts):
-        ends = ends.append(pd.Index([df_result.index[-1]]))
-
-    records = []
-    for s, e in zip(starts, ends):
-        seg      = no_det[s:e]
-        duration = (e - s).total_seconds()
-        avg_flow = float(seg.mean())
-        volume_l = float(seg.sum() / 60.0)
-
-        if duration < min_duration_s or volume_l < min_volume_l:
-            continue
-
-        records.append({
-            "place_id":      place_id,
-            "device_name":   "No Detectado",
-            "start_time":    s.isoformat(),
-            "end_time":      e.isoformat(),
-            "duration_s":    float(duration),
-            "flow_rate":     avg_flow,
-            "volume_liters": round(volume_l, 6),
-        })
-
-    return records
-
-
-def save_disaggregation_result(
-    place_id: int,
-    df_events: pd.DataFrame,
-    df_result: pd.DataFrame,
-) -> None:
-    """
-    Guarda eventos de desagregacion incluyendo No Detectado.
-
-    Combina los eventos de dispositivos identificados (df_events) con los
-    periodos de flujo no asignado (df_result[No Detectado]) en una sola
-    insercion a disaggregation_events. Esto permite que backfill_disaggregated_readings
-    incluya No Detectado automaticamente en disaggregated_readings.
+    Guarda eventos de desagregación con validación y volumen.
+    
+    Correcciones:
+    - Ahora guarda volume_liters (CRÍTICO)
+    - Manejo de errores con propagación
+    - Validación de datos
+    
+    Args:
+        place_id: ID del lugar
+        df_events: DataFrame con eventos [device, start_time, end_time, duration_seconds, flow_rate, volume_liters]
+        df_result: DataFrame con series temporales (no usado actualmente)
     """
     sb = get_supabase()
 
-    device_records = []
-
-    if not df_events.empty:
-        if "volume_liters" not in df_events.columns:
-            df_events["volume_liters"] = (
-                df_events["flow_rate"] * (df_events["duration_seconds"] / 60)
-            )
-
-        for _, row in df_events.iterrows():
-            device_records.append({
-                "place_id":      place_id,
-                "device_name":   row["device"],
-                "start_time":    row["start_time"].isoformat(),
-                "end_time":      row["end_time"].isoformat(),
-                "duration_s":    float(row["duration_seconds"]),
-                "flow_rate":     float(row["flow_rate"]),
-                "volume_liters": float(row["volume_liters"]),
-            })
-
-    no_det_records = _build_no_detected_events(place_id, df_result)
-
-    all_records = device_records + no_det_records
-
-    if not all_records:
+    if df_events.empty:
         print(f"[Disaggregation] place_id={place_id} No events to save.")
         return
 
+    # ✅ Validar que volume_liters existe
+    if 'volume_liters' not in df_events.columns:
+        print(f"[WARNING] volume_liters not found in df_events. This should not happen.")
+        # Calcular volume_liters si no existe (fallback)
+        df_events['volume_liters'] = df_events['flow_rate'] * (df_events['duration_seconds'] / 60)
+
+    event_records = []
+
+    for _, row in df_events.iterrows():
+        event_records.append({
+            "place_id": place_id,
+            "device_name": row["device"],
+            "start_time": row["start_time"].isoformat(),
+            "end_time": row["end_time"].isoformat(),
+            "duration_s": float(row["duration_seconds"]),
+            "flow_rate": float(row["flow_rate"]),
+            "volume_liters": float(row["volume_liters"])  # ✅ AÑADIDO
+        })
+
+    # ✅ Manejo de errores con logging
     try:
         sb.table("disaggregation_events").upsert(
-            all_records,
+            event_records, 
             on_conflict="place_id,device_name,start_time,end_time"
         ).execute()
-
-        vol_devices = sum(r["volume_liters"] for r in device_records)
-        vol_no_det  = sum(r["volume_liters"] for r in no_det_records)
-
-        print(
-            f"[Disaggregation] place_id={place_id} — "
-            f"saved {len(device_records)} device events ({vol_devices:.3f}L) + "
-            f"{len(no_det_records)} no-detectado events ({vol_no_det:.3f}L)"
-        )
-
+        
+        # Calcular volumen total para logging
+        total_volume = sum(r['volume_liters'] for r in event_records)
+        print(f"[Disaggregation] place_id={place_id} Saved events={len(event_records)}, total_volume={total_volume:.4f}L")
+        
     except Exception as e:
         print(f"[ERROR] Failed to save events for place_id={place_id}: {e}")
-        raise
+        raise  # ✅ Propagar error para que Celery lo maneje
 
 
 def get_all_places() -> List[Dict[str, Any]]:
