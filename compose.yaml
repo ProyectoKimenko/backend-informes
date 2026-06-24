@@ -1,16 +1,25 @@
+# Orquestación de API + worker + beat + redis.
+# Producción (Dokploy): define las variables de entorno (SUPABASE_URL, SUPABASE_KEY,
+# REDIS_URL, ALLOWED_ORIGINS) en el panel de Dokploy o en un archivo .env junto a este
+# compose. NO se commitean secretos: se interpolan con ${...}.
+# Local: copia .env.example a .env y `docker compose up --build`.
+
+x-app-env: &app-env
+  SUPABASE_URL: ${SUPABASE_URL}
+  SUPABASE_KEY: ${SUPABASE_KEY}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  PYTHONPATH: /app
+  PYTHONUNBUFFERED: "1"
+
 services:
   server:
     build: .
+    restart: unless-stopped
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
     environment:
-      - PYTHONUNBUFFERED=1
-      - REDIS_URL=redis://redis:6379/0
-      - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
-      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
-      - PYTHONPATH=/app
+      <<: *app-env
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
     depends_on:
       - redis
       - worker
@@ -20,40 +29,31 @@ services:
   worker:
     build: .
     container_name: disagg-worker
+    restart: unless-stopped
     command: celery -A worker.celery_app worker --loglevel=info
-    volumes:
-      - .:/app
-      - scalers_data:/app/scalers   # volumen persistente para los scalers
+    environment:
+      <<: *app-env
     depends_on:
       - redis
-    environment:
-      - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
-      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
-      - REDIS_URL=redis://redis:6379/0
-      - PYTHONPATH=/app
-      - SCALER_DIR=/app/scalers     # ruta dentro del contenedor
     networks:
       - kimenko
 
   beat:
     build: .
+    restart: unless-stopped
     command: celery -A worker.celery_app beat --loglevel=info
-    volumes:
-      - .:/app
+    environment:
+      <<: *app-env
     depends_on:
       - redis
       - worker
-    environment:
-      - SUPABASE_URL=https://mtyeznctoptxvnnkbvpl.supabase.co
-      - SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10eWV6bmN0b3B0eHZubmtidnBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE0NjMyNjEsImV4cCI6MjA0NzAzOTI2MX0.x-c5DXPiAvogTDPnFk3JGYQe7JQ3otHZn3mQdGe98pU
-      - REDIS_URL=redis://redis:6379/0
-      - PYTHONPATH=/app
     networks:
       - kimenko
 
   redis:
     image: redis:7-alpine
     container_name: kimenko-redis
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     networks:
@@ -61,8 +61,9 @@ services:
 
 volumes:
   redis_data:
-  scalers_data:    # volumen Docker gestionado — persiste entre reinicios del contenedor
 
+# Red gestionada por compose (antes era external:true y fallaba si no existía).
+# En Dokploy el dominio público se enruta aparte vía su red de Traefik.
 networks:
   kimenko:
-    external: true
+    driver: bridge

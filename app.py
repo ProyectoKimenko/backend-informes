@@ -37,10 +37,18 @@ logger = setup_logger(__name__)
 
 # Initialize FastAPI app and templates
 app = FastAPI()
+
+# CORS configurable por entorno. En producción (Cloudflare/Dokploy) define
+# ALLOWED_ORIGINS con los orígenes del frontend separados por coma, p.ej.:
+#   ALLOWED_ORIGINS=https://app.kimenko.cl,https://kimenko.cl
+# Nota: allow_origins=["*"] + allow_credentials=True es INVÁLIDO (los navegadores
+# lo rechazan), así que las credenciales solo se habilitan con orígenes explícitos.
+_origins_env = os.getenv("ALLOWED_ORIGINS", "*").strip()
+ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=ALLOWED_ORIGINS != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -858,10 +866,15 @@ async def get_task_status(task_id: str):
             'error': str(task_result.info)
         }
     else:
+        # Estados custom como PROGRESS llevan el meta en task_result.info
+        # (stage, progress, place_id...). Antes este else devolvía progress:0 y
+        # perdía ese detalle que la tarea sí calcula con update_state.
+        info = task_result.info if isinstance(task_result.info, dict) else {}
         response = {
             'task_id': task_id,
-            'status': task_result.state,
-            'progress': 0
+            'status': str(task_result.state).lower(),
+            'progress': info.get('progress', 0),
+            'stage': info.get('stage'),
         }
 
     return response

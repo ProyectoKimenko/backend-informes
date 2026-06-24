@@ -63,3 +63,6 @@ matplotlib_cache/
 # Temporary files
 temp/
 tmp/
+# Entorno y scripts de desarrollo NILM (no commitear)
+.venv-nilm/
+_nilm_*.py

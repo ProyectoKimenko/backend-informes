@@ -3,6 +3,8 @@ from typing import Any
 
 import pandas as pd
 
+from celery import chain
+
 from worker.celery_app import celery_app
 from services.supabase_service import (
     fetch_measurements,
@@ -13,7 +15,7 @@ from services.supabase_service import (
     save_official_profiles,
     get_supabase,
 )
-from pipeline.disaggregator import run_disaggregation
+from pipeline.disaggregator_simple import run_disaggregation
 
 
 def _parse_iso(value: str) -> datetime:
@@ -172,16 +174,27 @@ def process_all_places():
     end_time = datetime.utcnow()
     start_time = end_time - timedelta(days=1)
 
+    start_iso = start_time.isoformat()
+    end_iso = end_time.isoformat()
+
     for place in places:
-        process_disaggregation.delay(
-            place_id=place["id"],
-            start_time=start_time.isoformat(),
-            end_time=end_time.isoformat(),
-        )
+        pid = place["id"]
+        # Encadenar inferencia -> backfill para que disaggregated_readings (lo que
+        # consume el frontend) se refresque sola. Antes el cron solo desagregaba
+        # (escribía disaggregation_events) y nunca encadenaba el backfill, dejando
+        # el stackplot del frontend congelado entre disparos manuales.
+        chain(
+            process_disaggregation.s(
+                place_id=pid,
+                start_time=start_iso,
+                end_time=end_iso,
+            ),
+            backfill_disaggregated_readings.si(pid, start_iso, end_iso),
+        ).delay()
 
     return {
         "places_submitted": len(places),
-        "time_range": f"{start_time.isoformat()} to {end_time.isoformat()}",
+        "time_range": f"{start_iso} to {end_iso}",
     }
 
 
@@ -197,7 +210,7 @@ def train_model(place_id: int, start_time: str, end_time: str):
         if df.empty:
             return {"status": "no_data"}
 
-        from pipeline.disaggregator import train_disaggregator
+        from pipeline.disaggregator_simple import train_disaggregator
 
         profiles = train_disaggregator(df)
 
