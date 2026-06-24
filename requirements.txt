@@ -9,7 +9,6 @@ supabase
 requests
 numba
 scikit-learn
-celery
 redis
 python-multipart
 pydantic

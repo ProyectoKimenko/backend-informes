@@ -24,12 +24,17 @@ from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
 from pydantic import BaseModel, field_validator
-from worker.tasks import process_disaggregation, train_and_refresh_disaggregation
+from worker.tasks import (
+    train_and_refresh_disaggregation,
+    infer_and_refresh,
+    process_all_places,
+)
 from services.redis_client import redis_client as redis
 from services.supabase_service import get_stackplot_data
 import json
-from celery.result import AsyncResult
-from worker.celery_app import celery_app
+import uuid
+import asyncio
+import threading
 from services.supabase_service import get_supabase
 
 # Configuración de logging centralizada
@@ -52,6 +57,72 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# -----------------------------------------------------------------------------
+# Jobs en memoria + scheduler interno (reemplazan Celery + Redis para la
+# desagregación). A la escala actual (1 operador, jobs ocasionales) esto es
+# robusto y suficiente: sin worker/beat/redis separados. El estado de job es
+# efímero (se pierde al reiniciar el server), aceptable porque la inferencia es
+# idempotente y reentrenar es manual.
+# -----------------------------------------------------------------------------
+JOBS: dict = {}
+_JOBS_LOCK = threading.Lock()
+_JOBS_MAX = 200
+
+
+def _job_set(task_id: str, **fields):
+    with _JOBS_LOCK:
+        job = JOBS.get(task_id, {"task_id": task_id})
+        job.update(fields)
+        JOBS[task_id] = job
+        if len(JOBS) > _JOBS_MAX:                      # cota de memoria
+            for k in list(JOBS.keys())[: len(JOBS) - _JOBS_MAX]:
+                JOBS.pop(k, None)
+
+
+def _run_job(task_id: str, fn, *args, **kwargs):
+    """Corre fn(...) en background (threadpool de BackgroundTasks) trackeando estado."""
+    _job_set(task_id, status="processing", progress=5)
+
+    def cb(meta: dict):
+        _job_set(task_id, status="processing", **meta)
+
+    try:
+        result = fn(*args, progress_cb=cb, **kwargs)
+        st = result.get("status") if isinstance(result, dict) else None
+        terminal_ok = {"completed", "inference_done", "trained", "backfill_completed", None}
+        _job_set(
+            task_id,
+            status="completed" if st in terminal_ok else st,
+            progress=100,
+            result=result,
+        )
+    except Exception as e:
+        logger.exception(f"[JOB {task_id}] error")
+        _job_set(task_id, status="failed", error=str(e))
+
+
+def _new_task_id() -> str:
+    return uuid.uuid4().hex
+
+
+async def _hourly_scheduler():
+    """Dispara process_all_places al inicio de cada hora (reemplaza Celery beat)."""
+    while True:
+        now = datetime.utcnow()
+        nxt = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        await asyncio.sleep(max(1.0, (nxt - now).total_seconds()))
+        try:
+            res = await asyncio.to_thread(process_all_places)
+            logger.info(f"[scheduler] process_all_places -> {res}")
+        except Exception:
+            logger.exception("[scheduler] process_all_places falló")
+
+
+@app.on_event("startup")
+async def _start_scheduler():
+    asyncio.create_task(_hourly_scheduler())
+
 
 class DisaggregationRequest(BaseModel):
     place_id: int
@@ -808,94 +879,54 @@ async def scrape_place(
     return {"success": True, "message": "Scraping request initiated successfully"}
 
 @app.post("/jobs/disaggregate/{place_id}")
-def trigger(place_id: int):
-    task = process_disaggregation.delay(place_id)
-    return {"task_id": task.id}
+def trigger(place_id: int, background_tasks: BackgroundTasks):
+    task_id = _new_task_id()
+    _job_set(task_id, status="queued", place_id=place_id)
+    background_tasks.add_task(_run_job, task_id, infer_and_refresh, place_id)
+    return {"task_id": task_id, "status": "queued"}
 @app.post("/api/disaggregate/trigger")
-async def trigger_disaggregation(request: DisaggregationRequest):
+async def trigger_disaggregation(request: DisaggregationRequest, background_tasks: BackgroundTasks):
     if not request.start_time or not request.end_time:
         end_time = datetime.now()
         start_time = end_time - timedelta(hours=1)
         request.start_time = start_time.isoformat()
         request.end_time = end_time.isoformat()
-    
-    # Lanzar tarea Celery
-    task = process_disaggregation.delay(
-        place_id=request.place_id,
-        start_time=request.start_time,
-        end_time=request.end_time
+
+    task_id = _new_task_id()
+    _job_set(task_id, status="queued", place_id=request.place_id)
+    background_tasks.add_task(
+        _run_job, task_id, infer_and_refresh,
+        request.place_id, request.start_time, request.end_time,
     )
-    
     return {
-        "task_id": task.id,
-        "status": "processing",
+        "task_id": task_id,
+        "status": "queued",
         "place_id": request.place_id,
-        "message": "Disaggregation started"
+        "message": "Disaggregation started",
     }
 
 
 @app.get("/api/disaggregate/status/{task_id}")
 async def get_task_status(task_id: str):
-    
-    
-    task_result = AsyncResult(task_id, app=celery_app)
-    
-    if task_result.state == 'PENDING':
-        response = {
-            'task_id': task_id,
-            'status': 'pending',
-            'progress': 0
-        }
-    elif task_result.state == 'STARTED':
-        response = {
-            'task_id': task_id,
-            'status': 'processing',
-            'progress': 50
-        }
-    elif task_result.state == 'SUCCESS':
-        response = {
-            'task_id': task_id,
-            'status': 'completed',
-            'progress': 100,
-            'result': task_result.result
-        }
-    elif task_result.state == 'FAILURE':
-        response = {
-            'task_id': task_id,
-            'status': 'failed',
-            'error': str(task_result.info)
-        }
-    else:
-        # Estados custom como PROGRESS llevan el meta en task_result.info
-        # (stage, progress, place_id...). Antes este else devolvía progress:0 y
-        # perdía ese detalle que la tarea sí calcula con update_state.
-        info = task_result.info if isinstance(task_result.info, dict) else {}
-        response = {
-            'task_id': task_id,
-            'status': str(task_result.state).lower(),
-            'progress': info.get('progress', 0),
-            'stage': info.get('stage'),
-        }
-
-    return response
+    # Estado del job desde el dict en memoria (reemplaza el result backend de Celery).
+    job = JOBS.get(task_id)
+    if not job:
+        return {"task_id": task_id, "status": "not_found", "progress": 0}
+    return job
 
 
 @app.post("/api/disaggregate/last-hour/{place_id}")
-async def trigger_last_hour(place_id: int):
+async def trigger_last_hour(place_id: int, background_tasks: BackgroundTasks):
     end_time = datetime.now()
     start_time = end_time - timedelta(hours=1)
 
-    task = process_disaggregation.delay(
-        place_id=place_id,
-        start_time=start_time.isoformat(),
-        end_time=end_time.isoformat()
+    task_id = _new_task_id()
+    _job_set(task_id, status="queued", place_id=place_id)
+    background_tasks.add_task(
+        _run_job, task_id, infer_and_refresh,
+        place_id, start_time.isoformat(), end_time.isoformat(),
     )
-
-    return {
-        "task_id": task.id,
-        "status": "processing",
-        "place_id": place_id
-    }
+    return {"task_id": task_id, "status": "queued", "place_id": place_id}
 
 @app.get("/scrapers/{scraper_id}/status")
 def scraper_status(scraper_id: str):
@@ -1035,7 +1066,7 @@ async def get_stackplot(place_id: int, start_date: str, end_date: str, granulari
         log_error(logger, "fetching stackplot data", e)
         raise HTTPException(status_code=500, detail=f"Error fetching stackplot data: {str(e)}")
 @app.post("/api/disaggregate/train")
-def trigger_training(req: TrainingWorkflowRequest):
+def trigger_training(req: TrainingWorkflowRequest, background_tasks: BackgroundTasks):
     try:
         start_dt = datetime.fromisoformat(req.start_time.replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(req.end_time.replace("Z", "+00:00"))
@@ -1045,14 +1076,14 @@ def trigger_training(req: TrainingWorkflowRequest):
     if end_dt <= start_dt:
         raise HTTPException(status_code=400, detail="end_time debe ser mayor que start_time")
 
-    task = train_and_refresh_disaggregation.delay(
-        req.place_id,
-        req.start_time,
-        req.end_time,
+    task_id = _new_task_id()
+    _job_set(task_id, status="queued", place_id=req.place_id)
+    background_tasks.add_task(
+        _run_job, task_id, train_and_refresh_disaggregation,
+        req.place_id, req.start_time, req.end_time,
     )
-
     return {
-        "task_id": task.id,
+        "task_id": task_id,
         "status": "queued",
         "place_id": req.place_id,
         "message": "Training + disaggregation refresh started",

@@ -3,9 +3,6 @@ from typing import Any
 
 import pandas as pd
 
-from celery import chain
-
-from worker.celery_app import celery_app
 from services.supabase_service import (
     fetch_measurements,
     get_official_profiles,
@@ -80,15 +77,7 @@ def _count_available_days(place_id: int, start_time: str, end_time: str) -> int:
     return total
 
 
-@celery_app.task(
-    bind=True,
-    autoretry_for=(ConnectionError, TimeoutError),
-    retry_backoff=60,
-    retry_kwargs={"max_retries": 3},
-    retry_jitter=True,
-    name="worker.tasks.process_disaggregation",
-)
-def process_disaggregation(self, place_id: int, start_time: str | None = None, end_time: str | None = None):
+def process_disaggregation(place_id: int, start_time: str | None = None, end_time: str | None = None, progress_cb=None):
     try:
         if not start_time or not end_time:
             end_dt = datetime.utcnow()
@@ -122,9 +111,8 @@ def process_disaggregation(self, place_id: int, start_time: str | None = None, e
         raw_liters = float(df[flow_col].sum() / 60)
         smoothing_loss_pct = abs(raw_liters - assigned_liters) / raw_liters * 100 if raw_liters > 0 else 0.0
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
+        if progress_cb:
+            progress_cb({
                 "stage": "inference",
                 "progress": 65,
                 "place_id": place_id,
@@ -132,8 +120,7 @@ def process_disaggregation(self, place_id: int, start_time: str | None = None, e
                 "assigned_liters": float(assigned_liters),
                 "smoothing_loss_pct": round(smoothing_loss_pct, 3),
                 "events_detected": len(df_events),
-            },
-        )
+            })
 
         save_disaggregation_result(
             place_id,
@@ -167,38 +154,48 @@ def process_disaggregation(self, place_id: int, start_time: str | None = None, e
         raise
 
 
-@celery_app.task(name="worker.tasks.process_all_places")
+def infer_and_refresh(place_id: int, start_time: str | None = None, end_time: str | None = None, progress_cb=None):
+    """Inferencia + backfill: lo que un disparo manual o el cron necesitan para
+    refrescar disaggregated_readings (lo que consume el stackplot del frontend).
+    Degrada gracioso si no hay datos/modelo (no_data / no_model_found)."""
+    res = process_disaggregation(place_id, start_time, end_time, progress_cb=progress_cb)
+    if isinstance(res, dict) and res.get("status") == "inference_done":
+        if progress_cb:
+            progress_cb({"stage": "backfill", "progress": 85, "place_id": place_id})
+        try:
+            res["backfill"] = backfill_disaggregated_readings(place_id, start_time, end_time)
+        except Exception as e:
+            res["backfill_error"] = str(e)
+    return res
+
+
 def process_all_places():
+    """Job horario (lo llama el scheduler interno de app.py): por cada place,
+    desagrega las últimas 24h y refresca el backfill. Síncrono y secuencial — a la
+    escala actual (pocos places) es robusto y suficiente, sin cola distribuida."""
     places = get_all_places()
 
     end_time = datetime.utcnow()
     start_time = end_time - timedelta(days=1)
+    start_iso, end_iso = start_time.isoformat(), end_time.isoformat()
 
-    start_iso = start_time.isoformat()
-    end_iso = end_time.isoformat()
-
+    processed = 0
     for place in places:
         pid = place["id"]
-        # Encadenar inferencia -> backfill para que disaggregated_readings (lo que
-        # consume el frontend) se refresque sola. Antes el cron solo desagregaba
-        # (escribía disaggregation_events) y nunca encadenaba el backfill, dejando
-        # el stackplot del frontend congelado entre disparos manuales.
-        chain(
-            process_disaggregation.s(
-                place_id=pid,
-                start_time=start_iso,
-                end_time=end_iso,
-            ),
-            backfill_disaggregated_readings.si(pid, start_iso, end_iso),
-        ).delay()
+        try:
+            res = infer_and_refresh(pid, start_iso, end_iso)
+            if isinstance(res, dict) and res.get("status") == "inference_done":
+                processed += 1
+        except Exception as e:
+            print(f"[CRON] place_id={pid} falló: {e}")
 
     return {
-        "places_submitted": len(places),
+        "places_processed": processed,
+        "places_total": len(places),
         "time_range": f"{start_iso} to {end_iso}",
     }
 
 
-@celery_app.task(name="worker.tasks.train_model")
 def train_model(place_id: int, start_time: str, end_time: str):
     try:
         df = fetch_measurements(
@@ -233,7 +230,6 @@ def train_model(place_id: int, start_time: str, end_time: str):
         }
 
 
-@celery_app.task(name="worker.tasks.backfill_disaggregated_readings")
 def backfill_disaggregated_readings(place_id: int, start_time: str | None = None, end_time: str | None = None):
     sb = get_supabase()
 
@@ -283,8 +279,7 @@ def backfill_disaggregated_readings(place_id: int, start_time: str | None = None
     }
 
 
-@celery_app.task(bind=True, name="worker.tasks.train_and_refresh_disaggregation")
-def train_and_refresh_disaggregation(self, place_id: int, start_time: str, end_time: str):
+def train_and_refresh_disaggregation(place_id: int, start_time: str, end_time: str, progress_cb=None):
     try:
         start_dt = _parse_iso(start_time)
         end_dt = _parse_iso(end_time)
@@ -305,15 +300,8 @@ def train_and_refresh_disaggregation(self, place_id: int, start_time: str, end_t
                 "required_days": 21,
             }
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "stage": "training",
-                "progress": 10,
-                "place_id": place_id,
-                "available_days": available_days,
-            },
-        )
+        if progress_cb:
+            progress_cb({"stage": "training", "progress": 10, "place_id": place_id, "available_days": available_days})
 
         training_result = train_model(place_id, start_time, end_time)
         if training_result.get("status") != "trained":
@@ -323,18 +311,11 @@ def train_and_refresh_disaggregation(self, place_id: int, start_time: str, end_t
                 "training_result": training_result,
             }
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "stage": "disaggregation",
-                "progress": 45,
-                "place_id": place_id,
-                "available_days": available_days,
-                "training_result": training_result,
-            },
-        )
+        if progress_cb:
+            progress_cb({"stage": "disaggregation", "progress": 45, "place_id": place_id,
+                         "available_days": available_days, "training_result": training_result})
 
-        inference_result = process_disaggregation.run(
+        inference_result = process_disaggregation(
             place_id=place_id,
             start_time=start_time,
             end_time=end_time,
@@ -348,19 +329,12 @@ def train_and_refresh_disaggregation(self, place_id: int, start_time: str, end_t
                 "inference_result": inference_result,
             }
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "stage": "backfill",
-                "progress": 80,
-                "place_id": place_id,
-                "available_days": available_days,
-                "training_result": training_result,
-                "inference_result": inference_result,
-            },
-        )
+        if progress_cb:
+            progress_cb({"stage": "backfill", "progress": 80, "place_id": place_id,
+                         "available_days": available_days, "training_result": training_result,
+                         "inference_result": inference_result})
 
-        backfill_result = backfill_disaggregated_readings.run(
+        backfill_result = backfill_disaggregated_readings(
             place_id=place_id,
             start_time=start_time,
             end_time=end_time,

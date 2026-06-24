@@ -1,8 +1,9 @@
-# Orquestación de API + worker + beat + redis.
-# Producción (Dokploy): define las variables de entorno (SUPABASE_URL, SUPABASE_KEY,
-# REDIS_URL, ALLOWED_ORIGINS) en el panel de Dokploy o en un archivo .env junto a este
-# compose. NO se commitean secretos: se interpolan con ${...}.
-# Local: copia .env.example a .env y `docker compose up --build`.
+# Orquestación: API (server) + redis.
+# La desagregación corre DENTRO del server (FastAPI BackgroundTasks + scheduler
+# horario interno) — ya no hay worker/beat de Celery. Redis se mantiene solo para
+# el estado de scrapers legacy (servicios /monitors, /scrapers/status).
+# Producción (Dokploy): definir SUPABASE_URL, SUPABASE_KEY, REDIS_URL, ALLOWED_ORIGINS
+# en el panel o un .env junto a este compose. Secretos vía ${...}, no commiteados.
 
 x-app-env: &app-env
   SUPABASE_URL: ${SUPABASE_URL}
@@ -22,31 +23,6 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
     depends_on:
       - redis
-      - worker
-    networks:
-      - kimenko
-
-  worker:
-    build: .
-    container_name: disagg-worker
-    restart: unless-stopped
-    command: celery -A worker.celery_app worker --loglevel=info
-    environment:
-      <<: *app-env
-    depends_on:
-      - redis
-    networks:
-      - kimenko
-
-  beat:
-    build: .
-    restart: unless-stopped
-    command: celery -A worker.celery_app beat --loglevel=info
-    environment:
-      <<: *app-env
-    depends_on:
-      - redis
-      - worker
     networks:
       - kimenko
 
@@ -62,8 +38,6 @@ services:
 volumes:
   redis_data:
 
-# Red gestionada por compose (antes era external:true y fallaba si no existía).
-# En Dokploy el dominio público se enruta aparte vía su red de Traefik.
 networks:
   kimenko:
     driver: bridge
