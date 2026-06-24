@@ -17,6 +17,9 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
     timezone="UTC",
+    # Expirar los resultados de tareas (claves celery-task-meta-*) para que no se
+    # acumulen indefinidamente en Redis (el cron horario encola N tareas/hora).
+    result_expires=86400,        # 24h
 )
 
 celery_app.conf.beat_schedule = {
