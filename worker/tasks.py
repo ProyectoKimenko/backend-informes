@@ -13,6 +13,7 @@ from services.supabase_service import (
     get_supabase,
 )
 from pipeline.disaggregator_simple import run_disaggregation
+from pipeline.segmentation import integrate_volume
 
 
 def _parse_iso(value: str) -> datetime:
@@ -106,10 +107,20 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
 
         df_events, df_result = run_disaggregation(df, profiles)
 
-        assigned_liters = df_result.sum().sum() / 60
+        # Litros con integral por Δt real (antes sum()/60 asumía cadencia fija).
         flow_col = "flow_rate" if "flow_rate" in df.columns else "flow"
-        raw_liters = float(df[flow_col].sum() / 60)
-        smoothing_loss_pct = abs(raw_liters - assigned_liters) / raw_liters * 100 if raw_liters > 0 else 0.0
+        _ts = pd.to_datetime(df["timestamp"], utc=True, errors="coerce") if "timestamp" in df.columns else df.index
+        _raw = pd.Series(df[flow_col].astype(float).values, index=_ts).dropna().sort_index()
+        raw_liters = integrate_volume(_raw)
+
+        device_cols = [c for c in df_result.columns if c != "No Detectado"]
+        assigned_liters = integrate_volume(df_result[device_cols].sum(axis=1)) if device_cols else 0.0
+        nd_liters = integrate_volume(df_result["No Detectado"]) if "No Detectado" in df_result.columns else 0.0
+        total_liters = assigned_liters + nd_liters
+        # smoothing_loss: raw vs total procesado (≈0, solo el suavizado). discrepancy:
+        # % NO atribuido a fixtures (= cuota de No Detectado), la métrica real de cobertura.
+        smoothing_loss_pct = abs(raw_liters - total_liters) / raw_liters * 100 if raw_liters > 0 else 0.0
+        discrepancy_pct = round(nd_liters / total_liters * 100, 3) if total_liters > 0 else 0.0
 
         if progress_cb:
             progress_cb({
@@ -136,8 +147,9 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
             "audit": {
                 "raw_liters": raw_liters,
                 "assigned_liters": float(assigned_liters),
+                "no_detectado_liters": float(nd_liters),
                 "smoothing_loss_pct": round(smoothing_loss_pct, 3),
-                "discrepancy_pct": 0.0,
+                "discrepancy_pct": discrepancy_pct,
             },
         }
 
@@ -237,7 +249,7 @@ def backfill_disaggregated_readings(place_id: int, start_time: str | None = None
 
     query = (
         sb.table("disaggregation_events")
-        .select("id, device_name, start_time, end_time, flow_rate")
+        .select("id, device_name, start_time, end_time, flow_rate, volume_liters")
         .eq("place_id", place_id)
     )
 
@@ -397,7 +409,13 @@ def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
         device = row["device"]
 
         event_duration_seconds = (end - start).total_seconds()
-        event_volume = flow_rate * (event_duration_seconds / 60)
+        # Usar el volumen YA INTEGRADO del evento (Δt real) y repartirlo
+        # proporcional al tiempo; fallback a caudal·duración si no viniera.
+        _stored_vol = row.get("volume_liters")
+        event_volume = (
+            float(_stored_vol) if _stored_vol is not None and pd.notna(_stored_vol)
+            else flow_rate * (event_duration_seconds / 60)
+        )
         total_volume_before += event_volume
 
         minute_range = pd.date_range(
@@ -415,7 +433,8 @@ def generate_minute_downsample(df_events: pd.DataFrame, place_id: int):
             overlap_seconds = (overlap_end - overlap_start).total_seconds()
 
             if overlap_seconds > 0.001:
-                volume = flow_rate * (overlap_seconds / 60)
+                frac = overlap_seconds / event_duration_seconds if event_duration_seconds > 0 else 0.0
+                volume = event_volume * frac
 
                 records.append({
                     "place_id": place_id,

@@ -1,6 +1,6 @@
 import pandas as pd
-from supabase import create_client
 import os
+from services.supabase_service import get_supabase
 import numpy as np
 from numba import njit
 from datetime import timezone, datetime
@@ -291,8 +291,8 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
     Returns:
         dict: dictionary containing analysis results.
     """
-    supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_KEY"))
-    
+    supabase = get_supabase()  # singleton (prefiere service_role)
+
     query = supabase.table("measurements").select("*")
     if place_id is not None:
         query = query.eq("place_id", place_id)

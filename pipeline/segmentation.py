@@ -165,3 +165,31 @@ def is_valid_event(mean_flow: float, duration_s: float, volume_l: float) -> bool
                 volume_l >= bucket["min_volume_l"]
             )
     return True
+
+
+def integrate_volume(series: "pd.Series", gap_cap_s: float = 5.0) -> float:
+    """Litros de un tramo de caudal integrando con el Δt REAL entre muestras.
+
+    volumen = Σ flow_i(L/min) · Δt_i(s) / 60. Reemplaza el viejo ``serie.sum()/60``
+    que asumía cadencia fija de 1 muestra/min y sesgaba el volumen (~+6.8% en la
+    señal realtime ~1 Hz; muy errado en la legacy a 30 s). El Δt se deriva del
+    índice temporal; se acota a ``max(gap_cap_s, 3·mediana)`` para que un HUECO de
+    datos (no una cadencia legítima) no integre un volumen espurio. Adaptativo:
+    a 1 Hz el cap efectivo es 5 s, a 30 s es ~90 s.
+    """
+    if series is None or len(series) == 0:
+        return 0.0
+    vals = np.asarray(series.to_numpy(dtype=float))
+    try:
+        # .copy() porque to_numpy() puede devolver una vista de solo-lectura.
+        dt = np.array(series.index.to_series().diff().dt.total_seconds().to_numpy(), dtype=float)
+    except (AttributeError, TypeError):
+        # Índice no temporal: fallback conservador a cadencia unitaria (1 s).
+        return float(np.nansum(vals) / 60.0)
+    med = np.nanmedian(dt[1:]) if len(dt) > 1 else np.nan
+    if not np.isfinite(med) or med <= 0:
+        med = 1.0
+    dt[0] = med  # la primera muestra no tiene Δt previo → usa la mediana
+    cap = max(gap_cap_s, 3.0 * med)
+    dt = np.clip(np.nan_to_num(dt, nan=med), 0.0, cap)
+    return float(np.nansum(vals * dt) / 60.0)

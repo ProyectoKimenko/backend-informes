@@ -3,18 +3,27 @@ from supabase import create_client, Client
 import pandas as pd
 import os
 
+from pipeline.segmentation import integrate_volume
+
 _supabase: Optional[Client] = None
 
 
 def get_supabase() -> Client:
-    """Obtiene o crea una instancia singleton del cliente de Supabase."""
+    """Cliente singleton de Supabase para el BACKEND.
+
+    Prefiere SUPABASE_SERVICE_ROLE_KEY (bypassa RLS y permite escribir
+    perfiles/eventos/readings) y cae a SUPABASE_KEY (anon) solo si no está, para
+    compatibilidad. Con esta credencial el backend sigue operando aunque se
+    revoquen los grants de anon y se active RLS en Supabase (cierre del agujero
+    por el que la anon key pública podía DELETE/TRUNCATE las tablas).
+    """
     global _supabase
     if _supabase is None:
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 
         if not url or not key:
-            raise RuntimeError("Missing SUPABASE_URL or SUPABASE_KEY")
+            raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY")
 
         _supabase = create_client(url, key)
 
@@ -219,7 +228,7 @@ def _build_no_detected_events(
         seg      = no_det[s:e]
         duration = (e - s).total_seconds()
         avg_flow = float(seg.mean())
-        volume_l = float(seg.sum() / 60.0)
+        volume_l = integrate_volume(seg)   # litros con Δt real (antes seg.sum()/60)
 
         if duration < min_duration_s or volume_l < min_volume_l:
             continue
@@ -506,9 +515,16 @@ def audit_volume_conservation(place_id: int, start_time: str, end_time: str) -> 
                 "readings_discrepancy_pct": 0
             }
         
-        # Detectar columna de flujo
+        # Detectar columna de flujo e integrar con Δt real (antes sum()/60 asumía
+        # cadencia fija de 1/min y sesgaba el volumen "original" de referencia).
         flow_col = 'flow_rate' if 'flow_rate' in df_measurements.columns else 'flow'
-        original_volume = df_measurements[flow_col].sum() / 60
+        _ts = pd.to_datetime(df_measurements['timestamp'], utc=True, errors='coerce')
+        _flow_series = (
+            pd.Series(df_measurements[flow_col].astype(float).values, index=_ts)
+            .dropna()
+            .sort_index()
+        )
+        original_volume = integrate_volume(_flow_series)
         
         # 2. Volumen en eventos
         events = sb.table("disaggregation_events")\

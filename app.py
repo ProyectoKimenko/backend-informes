@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from fastapi.requests import Request
 from fastapi import Body
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
@@ -16,7 +17,6 @@ import numpy as np
 import os
 import pandas as pd
 import tempfile
-from supabase import create_client
 import requests
 import time
 from src.analysis import analyze_data, analyze_data_from_df
@@ -146,7 +146,30 @@ class UpdateDisaggregationProfileLabelRequest(BaseModel):
 
 DATASETS = {}
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory=tempfile.gettempdir()), name="static")
+
+# Directorio acotado para imágenes/PDF generados (NO se sirve públicamente).
+# Antes /static montaba tempfile.gettempdir() entero -> exponía TODO /tmp a
+# internet (cualquiera podía leer archivos temporales del host). Ahora /static
+# sirve solo los assets propios de la app (logo, fondos) y los temporales viven
+# en un subdir dedicado que se barre por antigüedad.
+GEN_DIR = os.path.join(tempfile.gettempdir(), "kimenko_generated")
+os.makedirs(GEN_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+def _sweep_generated(max_age_s: int = 3600) -> None:
+    """Borra de GEN_DIR los archivos más viejos que max_age_s (evita fuga de disco)."""
+    try:
+        now = time.time()
+        for fn in os.listdir(GEN_DIR):
+            fp = os.path.join(GEN_DIR, fn)
+            try:
+                if os.path.isfile(fp) and (now - os.path.getmtime(fp)) > max_age_s:
+                    os.remove(fp)
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 # Middleware para logging de requests
 @app.middleware("http")
@@ -297,7 +320,7 @@ def create_plot(data, title_prefix, date_str):
     # Improve layout
     plt.tight_layout()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png', dir=GEN_DIR) as temp_file:
         plt.savefig(temp_file.name, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close()
     return temp_file.name
@@ -390,7 +413,7 @@ def create_weekly_trend_plot(weeks_data):
 
     plt.tight_layout(rect=[0, 0, 0.85, 0.95], h_pad=0.8)
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png', dir=GEN_DIR) as temp_file:
         plt.savefig(temp_file.name, bbox_inches='tight', dpi=100, facecolor='white')
         plt.close()
     return temp_file.name
@@ -463,7 +486,7 @@ def create_total_weekly_consumption_chart(weeks_data):
     
     plt.tight_layout()
     
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.png', dir=GEN_DIR) as temp_file:
         plt.savefig(temp_file.name, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close()
     return temp_file.name
@@ -519,7 +542,7 @@ def make_scraping_request(place_id: int, start_date: str, end_date: str):
 # Initialize Supabase client
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY")
-supabase = create_client(supabase_url, supabase_key)
+supabase = get_supabase()  # singleton (prefiere service_role)
 
 # API Endpoints
 @app.get("/ping", status_code=200)
@@ -625,6 +648,7 @@ async def generate_weekly_pdf(
     place_id: int = None
 ):
     time_start = time.time()
+    _sweep_generated()  # limpia PNGs/PDF temporales viejos (evita fuga de disco)
     try:
         response = supabase.table("places").select("*").execute()
         places = response.data if response.data else []
@@ -780,7 +804,8 @@ async def generate_weekly_pdf(
         return FileResponse(
             pdf_file,
             media_type='application/pdf',
-            filename=f'water_analysis_weeks_{start_week}-{end_week}_{year}.pdf'
+            filename=f'water_analysis_weeks_{start_week}-{end_week}_{year}.pdf',
+            background=BackgroundTask(os.remove, pdf_file),  # borrar el PDF tras enviarlo
         )
         
     except HTTPException as he:
@@ -798,7 +823,7 @@ async def check_weeks(year: int):
         if not supabase_url or not supabase_key:
             raise HTTPException(status_code=500, detail="Supabase credentials not set.")
 
-        supabase = create_client(supabase_url, supabase_key)
+        supabase = get_supabase()  # singleton (prefiere service_role)
         weeks_data = {}
         
         # Use UTC timezone starting at 00:00
@@ -847,7 +872,7 @@ async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
     if not supabase_url or not supabase_key:
         raise HTTPException(status_code=500, detail="Supabase credentials not set.")
 
-    supabase = create_client(supabase_url, supabase_key)
+    supabase = get_supabase()  # singleton (prefiere service_role)
     response = supabase.table("places").insert({"name": name, "flow_reporter_id": flow_reporter_id}).execute()
     new_place = response.data[0] if response.data else None
 

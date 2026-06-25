@@ -26,7 +26,12 @@ import pandas as pd
 from sklearn.mixture import GaussianMixture
 
 # Preprocesado y segmentación de eventos (módulo compartido).
-from pipeline.segmentation import preprocess_signal, segment_events, is_valid_event
+from pipeline.segmentation import (
+    preprocess_signal,
+    segment_events,
+    is_valid_event,
+    integrate_volume,
+)
 
 # Escalas fijas para hacer comparables caudal (L/min) y duración (s) en la distancia
 # 2D, sin necesidad de un StandardScaler persistido. ~45 s de duración "pesa" como
@@ -62,7 +67,11 @@ def auto_label(mean_flow: float, mean_duration: float) -> str:
 
 
 def device_name(mean_flow: float, mean_duration: float) -> str:
-    return f"{auto_label(mean_flow, mean_duration)} ({mean_flow:.1f} L/min)"
+    # La CATEGORÍA es la clase del fixture (ducha/inodoro/lavamanos...), NO lleva el
+    # caudal embebido. Antes devolvía "Ducha (8.0 L/min)", lo que fragmentaba cada
+    # artefacto en tantas categorías como modos GMM (8.0 vs 8.3 = dos series) y se
+    # multiplicaba en cada reentrenamiento. El caudal queda como metadato (mean_flow).
+    return auto_label(mean_flow, mean_duration)
 
 
 # -----------------------------------------------------------------------------
@@ -114,8 +123,17 @@ def find_profiles(
     return np.column_stack([merged[:, 0] * FLOW_SCALE, merged[:, 1] * DUR_SCALE])
 
 
-def _tolerances(centroids_norm: np.ndarray, frac: float = 0.6, floor: float = 0.6) -> np.ndarray:
-    """tol de cada perfil = fracción de la distancia (norm) al centroide más cercano."""
+def _tolerances(centroids_norm: np.ndarray, frac: float = 3.0, floor: float = 4.0) -> np.ndarray:
+    """Radio de rechazo de cada perfil en el espacio 2D normalizado.
+
+    tol = max(floor, frac · distancia al centroide más cercano). Un evento cuyo
+    punto (caudal, duración) cae MÁS LEJOS que este radio del perfil asignado se
+    manda a "No Detectado" (el modelo dice "no sé") en vez de forzar la atribución.
+    Calibrado generoso (frac=3, floor=4): solo rechaza outliers reales (~4-5% del
+    volumen), sin penalizar la varianza natural de duración dentro de un fixture
+    (una ducha larga sigue siendo ducha). Con valores ajustados (0.6) rechazaba
+    >50% del volumen — demasiado.
+    """
     tols = []
     for i, c in enumerate(centroids_norm):
         others = np.delete(centroids_norm, i, axis=0)
@@ -143,25 +161,57 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
     dur = ev["duration_s"].values.astype(float)
 
     centroids = find_profiles(flow, dur)                 # raw [flow, dur]
-    centroids_norm = _normalize(centroids[:, 0], centroids[:, 1])
-    tols = _tolerances(centroids_norm)
-
-    # Asignar cada evento al centroide 2D más cercano (para peso y dispersión).
-    ev_norm = _normalize(flow, dur)
-    dists = np.linalg.norm(ev_norm[:, None, :] - centroids_norm[None, :, :], axis=2)
-    assign = np.argmin(dists, axis=1)
     total = max(len(ev), 1)
+    ev_norm = _normalize(flow, dur)
+
+    # Asignación preliminar a los centroides crudos (solo para ponderar el merge).
+    cn0 = _normalize(centroids[:, 0], centroids[:, 1])
+    assign0 = np.argmin(
+        np.linalg.norm(ev_norm[:, None, :] - cn0[None, :, :], axis=2), axis=1
+    )
+
+    # FUSIONAR por fixture: los centroides que comparten auto_label son el MISMO
+    # artefacto (dos modos GMM de "Ducha" a 8.0 y 8.3 L/min = una sola "Ducha").
+    # Se colapsan en un perfil con centroide = promedio ponderado por nº de eventos.
+    # Esto ataca la sobre-partición en el ORIGEN: ~9 perfiles -> ~4-5 fixtures
+    # estables, y un centroide que se mueve 0.1 L/min ya no crea categoría nueva.
+    groups: Dict[str, List[int]] = {}
+    for i in range(len(centroids)):
+        lab = auto_label(round(float(centroids[i, 0]), 2), round(float(centroids[i, 1]), 1))
+        groups.setdefault(lab, []).append(i)
+
+    m_cent, m_label = [], []
+    for lab, idxs in groups.items():
+        w = np.array([max(int((assign0 == i).sum()), 1) for i in idxs], dtype=float)
+        m_cent.append([
+            float(np.average(centroids[idxs, 0], weights=w)),
+            float(np.average(centroids[idxs, 1], weights=w)),
+        ])
+        m_label.append(lab)
+    m_cent = np.array(m_cent, dtype=float)
+
+    # Ordenar por caudal (salida estable) y recomputar tolerancias + asignación
+    # final sobre los centroides YA fusionados.
+    order = np.argsort(m_cent[:, 0])
+    m_cent = m_cent[order]
+    m_label = [m_label[i] for i in order]
+
+    cent_norm = _normalize(m_cent[:, 0], m_cent[:, 1])
+    tols = _tolerances(cent_norm)
+    assign = np.argmin(
+        np.linalg.norm(ev_norm[:, None, :] - cent_norm[None, :, :], axis=2), axis=1
+    )
 
     profiles: Dict[int, Dict] = {}
-    for i in range(len(centroids)):
-        fl = round(float(centroids[i, 0]), 2)
-        du = round(float(centroids[i, 1]), 1)
+    for i in range(len(m_cent)):
+        fl = round(float(m_cent[i, 0]), 2)
+        du = round(float(m_cent[i, 1]), 1)
         mask = assign == i
         n = int(mask.sum())
         std = float(np.std(flow[mask])) if n > 1 else 0.1
         profiles[i] = {
-            "name": device_name(fl, du),
-            "label": device_name(fl, du),        # auto, único (editable en la UI)
+            "name": m_label[i],
+            "label": m_label[i],                  # fixture (editable en la UI)
             "mean_flow": fl,
             "mean_duration": du,
             "st_deviation": round(max(std, 0.05), 2),
@@ -192,50 +242,47 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
     flow_s = df_proc["flow_smooth"]
 
     plist = list(profiles.values())
-    names = _unique_names([p.get("label") or p["name"] for p in plist])
+    # Una etiqueta por perfil (ya son fixtures distintos tras la fusión en train).
+    # out_cols = etiquetas distintas preservando orden: si dos perfiles compartieran
+    # label, sus litros SE SUMAN en una columna (no se crean "X #1").
+    labels = [(p.get("label") or p["name"]) for p in plist]
+    out_cols = list(dict.fromkeys(labels))
 
-    # Centroides 2D (raw) y tolerancias.
+    # Centroides 2D (raw), su norma y la tolerancia de rechazo por perfil.
     cent = np.array([
         p.get("centroid_nd") or [float(p.get("mean_flow", 0.0)), float(p.get("mean_duration", 0.0))]
         for p in plist
     ], dtype=float)
     cent_norm = _normalize(cent[:, 0], cent[:, 1])
+    tol_nd = np.array([float(p.get("tol_nd") or 0.0) for p in plist], dtype=float)
 
-    df_result = pd.DataFrame(0.0, index=flow_s.index, columns=names + ["No Detectado"])
+    df_result = pd.DataFrame(0.0, index=flow_s.index, columns=out_cols + ["No Detectado"])
     residual = flow_s.copy()
 
     df_seg = segment_events(df_proc)
-    n_ok = 0
+    n_ok = n_rej = 0
     if not df_seg.empty:
         for _, ev in df_seg.iterrows():
-            # Clasificar el evento por su perfil 2D (caudal, duración) más cercano y
-            # asignarle el caudal COMPLETO del evento. Sin rechazo duro: cada evento
-            # segmentado se atribuye (la cobertura es máxima; el No Detectado queda
-            # solo para el flujo basal sub-umbral que no formó evento). La
-            # simultaneidad de fixtures se atribuye al perfil dominante (simple).
+            # Clasificar el evento por su perfil 2D (caudal, duración) más cercano.
             en = _normalize(np.array([ev["mean_flow"]]), np.array([ev["duration_s"]]))[0]
-            j = int(np.argmin(np.linalg.norm(cent_norm - en, axis=1)))
-            n_ok += 1
+            d = np.linalg.norm(cent_norm - en, axis=1)
+            j = int(np.argmin(d))
             s, e = ev["start_time"], ev["end_time"]
             seg = residual[s:e]
-            df_result.loc[s:e, names[j]] += seg.values
+            # RECHAZO por tolerancia 2D (tol_nd): si el evento cae fuera del radio
+            # del perfil más cercano, el modelo dice "no sé" y el caudal queda en
+            # No Detectado en vez de forzar una atribución. Antes tol_nd se
+            # calculaba y persistía pero NO se usaba (todo evento se atribuía).
+            if tol_nd[j] > 0 and d[j] > tol_nd[j]:
+                n_rej += 1
+                continue
+            df_result.loc[s:e, labels[j]] += seg.values
             residual[s:e] = 0.0
+            n_ok += 1
 
     df_result["No Detectado"] = residual
-    print(f"[RunSimple] eventos asignados={n_ok}/{len(df_seg)}")
-    return _build_events(df_result, names), df_result
-
-
-def _unique_names(names: List[str]) -> List[str]:
-    seen, out = {}, []
-    for nm in names:
-        if nm in seen:
-            seen[nm] += 1
-            out.append(f"{nm} #{seen[nm]}")
-        else:
-            seen[nm] = 0
-            out.append(nm)
-    return out
+    print(f"[RunSimple] eventos asignados={n_ok}/{len(df_seg)} (rechazados→No Detectado={n_rej})")
+    return _build_events(df_result, out_cols), df_result
 
 
 def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFrame:
@@ -253,7 +300,7 @@ def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFr
             seg = df_result.loc[s:e, col]
             duration = (e - s).total_seconds()
             avg = float(seg.mean())
-            vol = float(seg.sum() / 60.0)
+            vol = integrate_volume(seg)   # litros con Δt real (antes seg.sum()/60)
             if not is_valid_event(avg, duration, vol):
                 continue
             rows.append({
