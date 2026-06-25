@@ -1103,6 +1103,27 @@ def get_available_dates(place_id: int, year: int, month: int):
     return {
         "available_days": [r["day"] for r in (res.data or [])]
     }
+
+
+@app.get("/api/places/{place_id}/data-range")
+def get_data_range(place_id: int):
+    """Rango temporal con datos en measurements_realtime para un place.
+    El frontend lo usa para inicializar el selector en el último mes CON datos
+    (en vez del mes actual del reloj, que suele estar vacío)."""
+    sb = get_supabase()
+    try:
+        mx = (sb.table("measurements_realtime").select("timestamp")
+              .eq("place_id", place_id).order("timestamp", desc=True).limit(1).execute())
+        mn = (sb.table("measurements_realtime").select("timestamp")
+              .eq("place_id", place_id).order("timestamp").limit(1).execute())
+        if not mx.data or not mn.data:
+            return {"has_data": False}
+        return {"has_data": True, "min": mn.data[0]["timestamp"], "max": mx.data[0]["timestamp"]}
+    except Exception as e:
+        log_error(logger, f"data-range place {place_id}", e)
+        return {"has_data": False, "error": str(e)}
+
+
 @app.get("/api/places/{place_id}/disaggregation-profiles")
 def get_disaggregation_profiles(place_id: int):
     sb = get_supabase()
