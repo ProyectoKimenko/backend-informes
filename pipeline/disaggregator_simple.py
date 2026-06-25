@@ -123,16 +123,17 @@ def find_profiles(
     return np.column_stack([merged[:, 0] * FLOW_SCALE, merged[:, 1] * DUR_SCALE])
 
 
-def _tolerances(centroids_norm: np.ndarray, frac: float = 3.0, floor: float = 4.0) -> np.ndarray:
+def _tolerances(centroids_norm: np.ndarray, frac: float = 8.0, floor: float = 12.0) -> np.ndarray:
     """Radio de rechazo de cada perfil en el espacio 2D normalizado.
 
     tol = max(floor, frac · distancia al centroide más cercano). Un evento cuyo
     punto (caudal, duración) cae MÁS LEJOS que este radio del perfil asignado se
     manda a "No Detectado" (el modelo dice "no sé") en vez de forzar la atribución.
-    Calibrado generoso (frac=3, floor=4): solo rechaza outliers reales (~4-5% del
-    volumen), sin penalizar la varianza natural de duración dentro de un fixture
-    (una ducha larga sigue siendo ducha). Con valores ajustados (0.6) rechazaba
-    >50% del volumen — demasiado.
+    Calibrado sobre los 1.1M de muestras reales (place 1): el piso irreducible de
+    No Detectado (flujo basal que nunca forma evento) es ~2.7%; frac=8/floor=12 da
+    ~3.2% (rechaza solo ~0.5% genuinamente anómalo) manteniendo 96.8% de cobertura.
+    Valores agresivos (frac=3) rechazaban duchas/usos largos por la varianza natural
+    de duración dentro de un fixture y disparaban No Detectado a ~18%.
     """
     tols = []
     for i, c in enumerate(centroids_norm):
