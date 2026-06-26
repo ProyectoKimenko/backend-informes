@@ -1163,6 +1163,42 @@ def get_data_range(place_id: int):
         return {"has_data": False, "error": str(e)}
 
 
+@app.get("/api/places/{place_id}/water-health")
+def get_water_health(place_id: int, days: int = 30):
+    """Salud hídrica / detección de fuga por CAUDAL BASE NOCTURNO (02:00-04:59).
+
+    Cuando nadie usa agua el caudal debería caer a ~0. Un PISO sostenido (p10 del
+    caudal nocturno) por encima del umbral indica consumo continuo: fuga, goteo o
+    inodoro corriendo. Se reporta el piso típico entre noches y los litros/día que
+    representa, para que el operador lo detecte temprano (es de los hallazgos de
+    mayor valor en gestión hídrica)."""
+    LEAK_THRESHOLD_LMIN = 0.15  # ~216 L/día; sobre esto sospechamos consumo continuo
+    sb = get_supabase()
+    try:
+        res = sb.rpc("water_health", {"p_place_id": place_id, "p_days": days}).execute()
+        nights = res.data or []
+        bases = [float(n["base_lmin"]) for n in nights if n.get("base_lmin") is not None]
+        if not bases:
+            return {"status": "sin_datos", "nights_analyzed": 0, "nights": nights}
+
+        base_sostenida = sorted(bases)[len(bases) // 2]  # mediana del piso entre noches
+        nights_flagged = sum(1 for b in bases if b > LEAK_THRESHOLD_LMIN)
+        is_leak = base_sostenida > LEAK_THRESHOLD_LMIN
+        status = "fuga_probable" if is_leak else ("revisar" if nights_flagged else "ok")
+        return {
+            "status": status,
+            "base_flow_lmin": round(base_sostenida, 3),
+            "estimated_daily_waste_l": round(base_sostenida * 1440.0, 1),
+            "threshold_lmin": LEAK_THRESHOLD_LMIN,
+            "nights_analyzed": len(nights),
+            "nights_flagged": nights_flagged,
+            "nights": nights,
+        }
+    except Exception as e:
+        log_error(logger, f"water-health place {place_id}", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/places/{place_id}/disaggregation-profiles")
 def get_disaggregation_profiles(place_id: int):
     sb = get_supabase()
