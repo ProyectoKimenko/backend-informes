@@ -180,6 +180,31 @@ def save_official_profiles(place_id: int, profiles: Dict[int, Dict]) -> None:
 
         records.append(record)
 
+    # PRESERVAR la calibración del operador a través del reentrenamiento: si un perfil
+    # oficial con el mismo `name` (la firma física es estable: Ducha/Inodoro/...) tenía
+    # un `label` editado por el operador (distinto del auto), se mantiene en vez de
+    # pisarlo con la etiqueta automática. Antes cada re-train borraba la edición.
+    try:
+        existing = (
+            sb.table("disaggregation_profiles")
+            .select("name,label")
+            .eq("place_id", place_id)
+            .eq("is_official", True)
+            .execute()
+        )
+        operator_labels = {
+            r["name"]: r["label"]
+            for r in (existing.data or [])
+            if r.get("label") and r["label"] != r.get("name")
+        }
+        if operator_labels:
+            for rec in records:
+                if rec["name"] in operator_labels:
+                    rec["label"] = operator_labels[rec["name"]]
+            print(f"[Profiles] Preservados {len(operator_labels)} labels del operador en place_id={place_id}")
+    except Exception as e:
+        print(f"[Profiles] WARN no se pudieron leer labels previos: {e}")
+
     try:
         # Retirar los oficiales actuales marcándolos inactivos (UPDATE) en lugar de
         # DELETE: get_official_profiles filtra is_official=True, así que los viejos
