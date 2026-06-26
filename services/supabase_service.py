@@ -176,14 +176,20 @@ def save_official_profiles(place_id: int, profiles: Dict[int, Dict]) -> None:
         records.append(record)
 
     try:
-        delete_response = sb.table("disaggregation_profiles") \
-            .delete() \
+        # Retirar los oficiales actuales marcándolos inactivos (UPDATE) en lugar de
+        # DELETE: get_official_profiles filtra is_official=True, así que los viejos
+        # dejan de usarse sin borrarlos. Esto vuelve al backend libre de DELETE en
+        # TODO su flujo, lo que permite REVOCARLE DELETE/TRUNCATE al rol anon (que el
+        # backend y el scraper comparten) — cerrando el riesgo de que la anon key
+        # pública (va en el frontend) destruya datos, sin necesitar la service_role.
+        retired = sb.table("disaggregation_profiles") \
+            .update({"is_official": False}) \
             .eq("place_id", place_id) \
             .eq("is_official", True) \
             .execute()
 
-        deleted = len(delete_response.data) if delete_response.data else 0
-        print(f"[Profiles] Deleted {deleted} old profiles for place_id={place_id}")
+        n_retired = len(retired.data) if retired.data else 0
+        print(f"[Profiles] Retired {n_retired} old profiles (is_official=False) for place_id={place_id}")
 
         sb.table("disaggregation_profiles").insert(records).execute()
 
