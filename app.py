@@ -1205,8 +1205,9 @@ def get_disaggregation_profiles(place_id: int):
 
     response = (
         sb.table("disaggregation_profiles")
-        .select("id, place_id, name, label")
+        .select("id, place_id, name, label, mean_flow, mean_duration, median_volume_l, cv_volume")
         .eq("place_id", place_id)
+        .eq("is_official", True)
         .order("name")
         .execute()
     )
