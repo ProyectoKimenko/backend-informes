@@ -61,8 +61,16 @@ def _split_long_segment(
     if len(seg) <= 3:
         return [(seg.index[0], seg.index[-1])]
 
+    # Umbral de corte ADAPTATIVO (relativo al caudal del segmento), no absoluto. Un
+    # umbral fijo de 1.0 L/min parte una ducha (~9 L/min con ruido ±1) en trozos
+    # espurios (~18% de las "duchas" quedaban fragmentadas, con duraciones irreales).
+    # Escalarlo con la mediana del caudal hace que solo las transiciones REALES
+    # (cambio de artefacto, que pasa por caudal bajo) corten, no el ruido interno.
+    # Piso en delta_threshold para no perder transiciones en caudales bajos.
+    eff_threshold = max(delta_threshold, 0.4 * float(seg.median()))
+
     local_delta = seg.diff().fillna(0.0).abs()
-    cut_points = seg.index[local_delta > delta_threshold]
+    cut_points = seg.index[local_delta > eff_threshold]
 
     if len(cut_points) == 0:
         return [(seg.index[0], seg.index[-1])]
