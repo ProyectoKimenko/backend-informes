@@ -32,7 +32,7 @@ from pipeline.segmentation import (
     is_valid_event,
     integrate_volume,
 )
-from pipeline.signatures import label_by_signature, VOLUME_RANGE_BY_LABEL
+from pipeline.signatures import label_by_signature, VOLUME_RANGE_BY_LABEL, COMPOSITE
 
 # Escalas fijas para hacer comparables caudal (L/min) y duración (s) en la distancia
 # 2D, sin necesidad de un StandardScaler persistido. ~45 s de duración "pesa" como
@@ -154,7 +154,18 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
         print(f"[TrainSimple] Solo {len(df_events)} eventos — insuficiente.")
         return {}
 
-    ev = df_events[df_events["mean_flow"] >= 0.5]
+    train_mask = df_events["mean_flow"] >= 0.5
+    # Excluir eventos CONCURRENTES (superposición de fixtures): su caudal/volumen están
+    # inflados por la suma de >=2 usos y desplazan los centroides GMM y las firmas
+    # físicas. No deben definir ningún perfil; se tratan aparte en inferencia.
+    n_comp = 0
+    if "is_composite" in df_events.columns:
+        comp = df_events["is_composite"].fillna(False).astype(bool)
+        n_comp = int(comp.sum())
+        train_mask &= ~comp
+    ev = df_events[train_mask]
+    if n_comp:
+        print(f"[TrainSimple] {n_comp} eventos concurrentes excluidos del entrenamiento.")
     if len(ev) < min_events:
         print("[TrainSimple] Pocos eventos con caudal >= 0.5.")
         return {}
@@ -319,19 +330,27 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
     cent_norm = _normalize(cent[:, 0], cent[:, 1])
     tol_nd = np.array([float(p.get("tol_nd") or 0.0) for p in plist], dtype=float)
 
-    df_result = pd.DataFrame(0.0, index=flow_s.index, columns=out_cols + ["No Detectado"])
+    df_result = pd.DataFrame(0.0, index=flow_s.index, columns=out_cols + [COMPOSITE, "No Detectado"])
     residual = flow_s.copy()
 
     df_seg = segment_events(df_proc)
-    n_ok = n_rej = 0
+    n_ok = n_rej = n_comp = 0
     if not df_seg.empty:
         for _, ev in df_seg.iterrows():
+            s, e = ev["start_time"], ev["end_time"]
+            seg = residual[s:e]
+            # EVENTO CONCURRENTE: superposición de >=2 fixtures, no separable con un
+            # solo sensor. Se atribuye entero a "Uso simultáneo" (honesto, conserva
+            # masa) en vez de forzar un fixture con caudal/volumen inflados.
+            if bool(ev.get("is_composite", False)):
+                df_result.loc[s:e, COMPOSITE] += seg.values
+                residual[s:e] = 0.0
+                n_comp += 1
+                continue
             # Clasificar el evento por su perfil 2D (caudal, duración) más cercano.
             en = _normalize(np.array([ev["mean_flow"]]), np.array([ev["duration_s"]]))[0]
             d = np.linalg.norm(cent_norm - en, axis=1)
             j = int(np.argmin(d))
-            s, e = ev["start_time"], ev["end_time"]
-            seg = residual[s:e]
             # RECHAZO por tolerancia 2D (tol_nd): si el evento cae fuera del radio
             # del perfil más cercano, el modelo dice "no sé" y el caudal queda en
             # No Detectado en vez de forzar una atribución. Antes tol_nd se
@@ -352,8 +371,11 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
             n_ok += 1
 
     df_result["No Detectado"] = residual
-    print(f"[RunSimple] eventos asignados={n_ok}/{len(df_seg)} (rechazados→No Detectado={n_rej})")
-    return _build_events(df_result, out_cols), df_result
+    print(f"[RunSimple] eventos asignados={n_ok}/{len(df_seg)} "
+          f"(concurrentes→Uso simultáneo={n_comp}, rechazados→No Detectado={n_rej})")
+    # COMPOSITE entra como device para que sus eventos se emitan; si no hubo
+    # concurrencia la columna es 0 y _build_events no genera nada para ella.
+    return _build_events(df_result, out_cols + [COMPOSITE]), df_result
 
 
 def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFrame:

@@ -93,6 +93,90 @@ def _split_long_segment(
     return subsegments
 
 
+def detect_composite(
+    seg: "pd.Series",
+    min_flow: float = 0.5,
+    min_hold_s: float = 8.0,
+    step_abs: float = 1.5,
+    step_frac: float = 0.35,
+) -> bool:
+    """¿Es este tramo activo un USO CONCURRENTE (superposición de >=2 fixtures)?
+
+    Firma de concurrencia (step-pairing / level-counting; US10838434B2, Pastor-Jabaloyes
+    et al., Water 2018): sobre un caudal base sostenido aparece una JOROBA — el caudal
+    sube a una meseta más alta, se mantiene, y vuelve a bajar a un nivel sostenido
+    parecido al base (un segundo artefacto se abrió y cerró mientras el primero seguía).
+    Esa meseta interior MÁS ALTA que sus dos vecinas (ambas por encima del basal) no se
+    explica como un único fixture (que sube, mantiene UN nivel y baja), sino como
+    superposición.
+
+    Distingue concurrencia de eventos SECUENCIALES: dos usos pegados pero NO simultáneos
+    bajan hacia el basal entre medio (valle bajo) y la derivada ya los separa en
+    ``_split_long_segment``; aquí el "valle" entre mesetas se mantiene ALTO.
+
+    Conservador a propósito (alta precisión): exige >=3 mesetas SOSTENIDAS
+    (>= ``min_hold_s``) con escalones significativos (>= max(step_abs, step_frac·nivel)).
+    La variabilidad normal de una ducha (que ``cv_flow`` ya capta) NO lo dispara, ni el
+    ajuste de caudal de una ducha (sube/baja monótono, sin joroba). LÍMITE conocido: dos
+    fixtures que arrancan SIMULTÁNEAMENTE (sin hombro) son indistinguibles de un único
+    fixture de caudal alto con un solo sensor — no se detectan, y es el techo físico.
+    """
+    if seg is None or len(seg) < 6:
+        return False
+    t = seg.index
+    v0 = np.asarray(seg.to_numpy(dtype=float), dtype=float)
+    n = len(v0)
+    # Denoise ligero (no ancho: un suavizado ancho convierte el escalón en rampa).
+    try:
+        v = seg.rolling(window=3, center=True, min_periods=1).median().to_numpy(dtype=float)
+    except Exception:
+        v = v0
+    half = max(3, int(round(min_hold_s / 2.0)))
+    if n < 2 * half + 2:
+        return False
+
+    # Fronteras de ESCALÓN por diferencia de medianas pre/post (robusto a rampas y a
+    # ruido: una rampa marca su frontera en el medio; el ruido se promedia). Tras una
+    # frontera saltamos `half` para no marcar el mismo flanco varias veces.
+    bnds = [0]
+    i = half
+    while i < n - half:
+        pre = float(np.median(v[i - half:i]))
+        post = float(np.median(v[i:i + half]))
+        thr = max(step_abs, step_frac * max(min(pre, post), 1e-9))
+        if abs(post - pre) > thr:
+            bnds.append(i)
+            i += half
+        else:
+            i += 1
+    bnds.append(n)
+
+    # Mesetas SOSTENIDAS entre fronteras (duración real >= min_hold_s).
+    sustained: List[Tuple[float, int, int]] = []
+    for k in range(len(bnds) - 1):
+        a, b = bnds[k], bnds[k + 1] - 1
+        if b < a:
+            continue
+        if (t[b] - t[a]).total_seconds() >= min_hold_s:
+            sustained.append((float(np.median(v[a:b + 1])), a, b))
+    if len(sustained) < 3:
+        return False
+
+    # ¿Hay una meseta INTERIOR sostenida más alta que sus dos vecinas (joroba)?
+    for k in range(1, len(sustained) - 1):
+        lvl_prev = sustained[k - 1][0]
+        lvl_cur = sustained[k][0]
+        lvl_next = sustained[k + 1][0]
+        up = lvl_cur - lvl_prev
+        down = lvl_cur - lvl_next
+        thr_up = max(step_abs, step_frac * max(min(lvl_cur, lvl_prev), 1e-9))
+        thr_dn = max(step_abs, step_frac * max(min(lvl_cur, lvl_next), 1e-9))
+        # Joroba real + vecinos que son uso genuino (no caudal basal): superposición.
+        if up >= thr_up and down >= thr_dn and min(lvl_prev, lvl_next) >= 1.5 * min_flow:
+            return True
+    return False
+
+
 def segment_events(
     df_proc: pd.DataFrame,
     min_flow: float = 0.5,
@@ -121,7 +205,16 @@ def segment_events(
         if duration < 5 or base_seg.mean() < min_flow:
             continue
 
-        if split_internal_changes:
+        # ¿Superposición de fixtures concurrentes? Se evalúa sobre el tramo activo
+        # COMPLETO, antes de partir: el split por derivada cortaría la joroba en
+        # subsegmentos con caudal combinado (igual de inflados y mal-etiquetados).
+        is_comp = detect_composite(base_seg, min_flow)
+
+        if is_comp:
+            # Concurrente: se emite ENTERO y marcado (se excluye del entrenamiento y
+            # va a la categoría "Uso simultáneo" en inferencia, no a un fixture).
+            segment_ranges = [(s, e)]
+        elif split_internal_changes:
             segment_ranges = _split_long_segment(
                 base_seg,
                 delta_threshold=delta_split_threshold,
@@ -175,6 +268,9 @@ def segment_events(
                 "std_flow": sflow,
                 "hour_sin": float(np.sin(2 * np.pi * hour / 24)),
                 "hour_cos": float(np.cos(2 * np.pi * hour / 24)),
+                # True = superposición de fixtures concurrentes (no separable con un
+                # solo sensor): se excluye del entrenamiento y se marca "Uso simultáneo".
+                "is_composite": bool(is_comp),
                 "start_time": ss,
                 "end_time": ee,
             })

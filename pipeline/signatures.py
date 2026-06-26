@@ -20,6 +20,13 @@ Se quitan del vocabulario los fixtures imposibles en un refugio de montaña
 
 UNCLASSIFIED = "Sin clasificar"
 
+# Evento que es SUPERPOSICIÓN de >=2 fixtures concurrentes (p.ej. ducha + grifo a la
+# vez). Con un solo sensor de caudal NO se puede separar de forma fiable, así que se
+# marca honestamente con esta categoría en vez de mal-atribuirlo a un fixture (lo que
+# inflaba su volumen/caudal y envenenaba el clustering). El operador ve cuánta agua fue
+# uso concurrente no separable.
+COMPOSITE = "Uso simultáneo"
+
 
 def label_by_signature(
     median_flow: float,
