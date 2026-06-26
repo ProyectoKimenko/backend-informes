@@ -140,13 +140,35 @@ def segment_events(
             hour = ss.hour
             mflow = float(seg.mean())
             sflow = float(seg.std()) if len(seg) > 1 else 0.0
+            vals = np.asarray(seg.values, dtype=float)
+            peak = float(seg.max())
+
+            # Caudal MODAL: el caudal más frecuente dentro del evento (binneado a
+            # 0.5 L/min). Discrimina fixtures de caudal nominal FIJO (válvula de
+            # inodoro, cabezal de ducha) mejor que la media — feature estándar de
+            # Autoflow/CIWS (Nguyen/Stewart/Beal; Attallah 2021, ~98% con peak+modo).
+            if len(vals):
+                binned = np.round(vals * 2.0) / 2.0
+                uq, cnt = np.unique(binned, return_counts=True)
+                modal_flow = float(uq[int(np.argmax(cnt))])
+            else:
+                modal_flow = mflow
+
+            # Gradientes de los flancos (forma rise/plateau/fall del evento).
+            k = min(3, len(vals) - 1) if len(vals) > 1 else 1
+            rise_grad = float((vals[k] - vals[0]) / k) if len(vals) > 1 else 0.0
+            fall_grad = float((vals[-1] - vals[-1 - k]) / k) if len(vals) > 1 else 0.0
 
             rows.append({
                 "mean_flow": mflow,
                 "duration_s": float(duration),
                 # VOLUMEN integrado por Δt real (litros): el discriminador físico #1.
                 "volume_liters": integrate_volume(seg),
-                "peak_flow": float(seg.max()),
+                "peak_flow": peak,
+                "modal_flow": modal_flow,              # caudal nominal (Autoflow/CIWS)
+                "peak_to_mean": (peak / mflow) if mflow > 0 else 1.0,
+                "rise_grad": rise_grad,
+                "fall_grad": fall_grad,
                 # CV intra-evento: bajo = caudal estable (fixture automático/cisterna),
                 # alto = caudal variable (uso manual de grifo).
                 "cv_flow": (sflow / mflow) if mflow > 0 else 0.0,

@@ -162,6 +162,10 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
     flow = ev["mean_flow"].values.astype(float)
     dur = ev["duration_s"].values.astype(float)
     vol = ev["volume_liters"].values.astype(float)
+    # Caudal MODAL (nominal) por evento — más robusto que la media para la firma
+    # (Autoflow/CIWS). Fallback a mean_flow si la columna no está (compat).
+    modal = (ev["modal_flow"].values.astype(float)
+             if "modal_flow" in ev.columns else flow)
 
     centroids = find_profiles(flow, dur)                 # raw [flow, dur]
     total = max(len(ev), 1)
@@ -174,13 +178,14 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
     )
 
     def _sig(mask: np.ndarray) -> Tuple[float, float, float, float]:
-        """Firma física del cluster: (caudal med, dur med, VOLUMEN med, CV del volumen)."""
+        """Firma física del cluster: (caudal MODAL med, dur med, VOLUMEN med, CV del volumen).
+        Usa el caudal modal (nominal) en vez de la media: más robusto para etiquetar."""
         if not mask.any():
             return 0.0, 0.0, 0.0, 0.0
         vv = vol[mask]
         mvol = float(np.median(vv))
         cvvol = float(np.std(vv) / np.mean(vv)) if np.mean(vv) > 0 else 0.0
-        return float(np.median(flow[mask])), float(np.median(dur[mask])), mvol, cvvol
+        return float(np.median(modal[mask])), float(np.median(dur[mask])), mvol, cvvol
 
     # FUSIONAR por FIRMA FÍSICA: cada centroide crudo se etiqueta por su firma
     # (caudal, duración, VOLUMEN mediano, CV del volumen entre sus eventos) y los que
