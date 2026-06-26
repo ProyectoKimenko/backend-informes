@@ -191,7 +191,12 @@ def save_official_profiles(place_id: int, profiles: Dict[int, Dict]) -> None:
         n_retired = len(retired.data) if retired.data else 0
         print(f"[Profiles] Retired {n_retired} old profiles (is_official=False) for place_id={place_id}")
 
-        sb.table("disaggregation_profiles").insert(records).execute()
+        # UPSERT por (place_id, name) (hay un UNIQUE unique_profile_per_place): los
+        # fixtures que reaparecen se REACTIVAN y actualizan en su fila (is_official
+        # vuelve a True por venir en el record), los nuevos se insertan, y los stale
+        # del paso anterior quedan is_official=False. Reemplaza al INSERT (que
+        # chocaba con el unique) y mantiene el flujo SIN DELETE.
+        sb.table("disaggregation_profiles").upsert(records, on_conflict="place_id,name").execute()
 
         labeled = sum(1 for r in records if r.get("label"))
         has_nd  = sum(1 for r in records if r.get("tol_nd") is not None)
