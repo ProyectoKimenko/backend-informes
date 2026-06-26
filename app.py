@@ -679,7 +679,21 @@ async def generate_weekly_pdf(
         
         response = query.execute()
         all_data = pd.DataFrame(response.data)
-        
+
+        # Fail-loud: sin datos en el período NO generamos un PDF engañoso. Antes se
+        # renderizaba igual con totales en 0 y "eficiencia" sin sentido, devolviendo
+        # HTTP 200 (el reporte "mentía"). NOTA: este endpoint aún lee la tabla legacy
+        # 'measurements' (vacía en 2026); el repunte a measurements_realtime queda
+        # pendiente — por ahora falla claro en vez de entregar un informe falso.
+        if all_data.empty:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"No hay datos de consumo para el lugar {place_id} en el período "
+                    f"{week_ranges[0][0].strftime('%d/%m/%Y')}–{week_ranges[-1][1].strftime('%d/%m/%Y')}."
+                ),
+            )
+
         report = Report(
             title=f"Informe de Consumo de Agua - {week_ranges[0][0].strftime('%d/%m/%Y')} al {week_ranges[-1][1].strftime('%d/%m/%Y')}",
             place_name=place_name

@@ -50,5 +50,12 @@ ENV PYTHONUNBUFFERED=1
 # Expose the port that the application listens on
 EXPOSE 8000
 
-# Run the application
-CMD uvicorn app:app --host 0.0.0.0 --port $PORT
+# Healthcheck contra /ping (sin curl: usa python, siempre presente). Permite que
+# el orquestador detecte un contenedor vivo-pero-no-sirviendo.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/ping', timeout=4).status==200 else 1)"
+
+# Exec-form para que SIGTERM llegue a uvicorn (shutdown limpio: los BackgroundTasks
+# en curso terminan en vez de cortarse). Antes shell-form -> uvicorn corría como
+# hijo de /bin/sh y no recibía la señal. Puerto fijo 8000 (ENV PORT).
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "30"]
