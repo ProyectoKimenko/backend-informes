@@ -172,6 +172,11 @@ def save_official_profiles(place_id: int, profiles: Dict[int, Dict]) -> None:
             record["centroid_nd"] = [float(v) for v in info["centroid_nd"]]
         if info.get("scaler_path"):
             record["scaler_path"] = str(info["scaler_path"])
+        # Firma física (para que el operador valide la etiqueta con datos)
+        if info.get("median_volume_l") is not None:
+            record["median_volume_l"] = float(info["median_volume_l"])
+        if info.get("cv_volume") is not None:
+            record["cv_volume"] = float(info["cv_volume"])
 
         records.append(record)
 

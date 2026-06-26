@@ -39,14 +39,16 @@ def preprocess_signal(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Features extraídas por evento (las usa el clustering; el desagregador 2D usa
-# mean_flow y duration_s).
+# Features extraídas por evento. El VOLUMEN integrado y el CV intra-evento son los
+# discriminadores físicos clave: el inodoro tiene VOLUMEN fijo de cisterna (CV bajo),
+# la ducha volumen alto sostenido, el grifo volumen chico. Antes solo se usaban
+# mean_flow+duration (rangos US) e ignoraban el volumen.
 EVENT_FEATURES = [
     "mean_flow",
     "duration_s",
-    "std_flow",
+    "volume_liters",
     "peak_flow",
-    "delta_rise",
+    "cv_flow",
     "hour_sin",
     "hour_cos",
 ]
@@ -135,18 +137,20 @@ def segment_events(
             if duration < 5 or seg.mean() < min_flow:
                 continue
 
-            rise = float(
-                seg.iloc[min(3, len(seg) - 1)] - seg.iloc[0]
-            ) if len(seg) > 1 else 0.0
-
             hour = ss.hour
+            mflow = float(seg.mean())
+            sflow = float(seg.std()) if len(seg) > 1 else 0.0
 
             rows.append({
-                "mean_flow": float(seg.mean()),
+                "mean_flow": mflow,
                 "duration_s": float(duration),
-                "std_flow": float(seg.std()) if len(seg) > 1 else 0.0,
+                # VOLUMEN integrado por Δt real (litros): el discriminador físico #1.
+                "volume_liters": integrate_volume(seg),
                 "peak_flow": float(seg.max()),
-                "delta_rise": rise,
+                # CV intra-evento: bajo = caudal estable (fixture automático/cisterna),
+                # alto = caudal variable (uso manual de grifo).
+                "cv_flow": (sflow / mflow) if mflow > 0 else 0.0,
+                "std_flow": sflow,
                 "hour_sin": float(np.sin(2 * np.pi * hour / 24)),
                 "hour_cos": float(np.cos(2 * np.pi * hour / 24)),
                 "start_time": ss,

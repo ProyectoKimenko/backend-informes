@@ -32,6 +32,7 @@ from pipeline.segmentation import (
     is_valid_event,
     integrate_volume,
 )
+from pipeline.signatures import label_by_signature, VOLUME_RANGE_BY_LABEL
 
 # Escalas fijas para hacer comparables caudal (L/min) y duración (s) en la distancia
 # 2D, sin necesidad de un StandardScaler persistido. ~45 s de duración "pesa" como
@@ -160,6 +161,7 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
 
     flow = ev["mean_flow"].values.astype(float)
     dur = ev["duration_s"].values.astype(float)
+    vol = ev["volume_liters"].values.astype(float)
 
     centroids = find_profiles(flow, dur)                 # raw [flow, dur]
     total = max(len(ev), 1)
@@ -171,14 +173,23 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
         np.linalg.norm(ev_norm[:, None, :] - cn0[None, :, :], axis=2), axis=1
     )
 
-    # FUSIONAR por fixture: los centroides que comparten auto_label son el MISMO
-    # artefacto (dos modos GMM de "Ducha" a 8.0 y 8.3 L/min = una sola "Ducha").
-    # Se colapsan en un perfil con centroide = promedio ponderado por nº de eventos.
-    # Esto ataca la sobre-partición en el ORIGEN: ~9 perfiles -> ~4-5 fixtures
-    # estables, y un centroide que se mueve 0.1 L/min ya no crea categoría nueva.
+    def _sig(mask: np.ndarray) -> Tuple[float, float, float, float]:
+        """Firma física del cluster: (caudal med, dur med, VOLUMEN med, CV del volumen)."""
+        if not mask.any():
+            return 0.0, 0.0, 0.0, 0.0
+        vv = vol[mask]
+        mvol = float(np.median(vv))
+        cvvol = float(np.std(vv) / np.mean(vv)) if np.mean(vv) > 0 else 0.0
+        return float(np.median(flow[mask])), float(np.median(dur[mask])), mvol, cvvol
+
+    # FUSIONAR por FIRMA FÍSICA: cada centroide crudo se etiqueta por su firma
+    # (caudal, duración, VOLUMEN mediano, CV del volumen entre sus eventos) y los que
+    # comparten firma se colapsan en un perfil. El VOLUMEN es el discriminador #1
+    # (inodoro = volumen ~fijo); antes se agrupaba por rangos US de caudal+duración
+    # que IGNORABAN el volumen y producían etiquetas físicamente imposibles.
     groups: Dict[str, List[int]] = {}
     for i in range(len(centroids)):
-        lab = auto_label(round(float(centroids[i, 0]), 2), round(float(centroids[i, 1]), 1))
+        lab = label_by_signature(*_sig(assign0 == i))
         groups.setdefault(lab, []).append(i)
 
     m_cent, m_label = [], []
@@ -209,12 +220,15 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
         du = round(float(m_cent[i, 1]), 1)
         mask = assign == i
         n = int(mask.sum())
+        _, _, mvol, cvvol = _sig(mask)            # firma del cluster fusionado
         std = float(np.std(flow[mask])) if n > 1 else 0.1
         profiles[i] = {
             "name": m_label[i],
             "label": m_label[i],                  # fixture (editable en la UI)
             "mean_flow": fl,
             "mean_duration": du,
+            "median_volume_l": round(mvol, 2),    # firma física: volumen típico por uso
+            "cv_volume": round(cvvol, 3),         # consistencia del volumen (bajo=cisterna)
             "st_deviation": round(max(std, 0.05), 2),
             "weight": round(n / total, 6),
             "tol": round(float(tols[i]) * FLOW_SCALE, 3),     # tol aproximado en L/min (fallback)
@@ -223,10 +237,10 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
             "scaler_path": "",
         }
 
-    print(f"[TrainSimple] {len(ev)} eventos -> {len(profiles)} perfiles (2D caudal+duración):")
+    print(f"[TrainSimple] {len(ev)} eventos -> {len(profiles)} perfiles (FIRMA física):")
     for p in profiles.values():
-        print(f"   {p['label']:34s} | caudal={p['mean_flow']:5.2f} L/min  "
-              f"dur~{p['mean_duration']:5.0f}s  tol={p['tol_nd']:.2f}  w={p['weight']:.3f}")
+        print(f"   {p['label']:24s} | Q={p['mean_flow']:5.2f} L/min  dur~{p['mean_duration']:4.0f}s  "
+              f"vol~{p['median_volume_l']:5.1f}L  cv={p['cv_volume']:.2f}  w={p['weight']:.3f}")
     return profiles
 
 
@@ -275,6 +289,14 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
             # No Detectado en vez de forzar una atribución. Antes tol_nd se
             # calculaba y persistía pero NO se usaba (todo evento se atribuía).
             if tol_nd[j] > 0 and d[j] > tol_nd[j]:
+                n_rej += 1
+                continue
+            # RECHAZO por RANGO FÍSICO de volumen: un evento cuyo volumen es
+            # implausible para la etiqueta asignada (p.ej. un "Inodoro" de 0.05 L) va
+            # a No Detectado en vez de contaminar el cluster con física imposible.
+            ev_vol = float(ev.get("volume_liters", 0.0) or 0.0)
+            vmin, vmax = VOLUME_RANGE_BY_LABEL.get(labels[j], (0.0, float("inf")))
+            if not (vmin <= ev_vol <= vmax):
                 n_rej += 1
                 continue
             df_result.loc[s:e, labels[j]] += seg.values
