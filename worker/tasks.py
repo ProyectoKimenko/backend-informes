@@ -219,18 +219,26 @@ def train_model(place_id: int, start_time: str, end_time: str):
         if df.empty:
             return {"status": "no_data"}
 
-        from pipeline.disaggregator_simple import train_disaggregator
+        from pipeline.disaggregator_simple import train_disaggregator, apply_confirmations
+        from services.supabase_service import get_confirmations
 
         profiles = train_disaggregator(df)
 
         if not profiles:
             return {"status": "no_patterns_found"}
 
+        # Semi-supervisado: las confirmaciones del operador re-etiquetan los clusters
+        # (su conocimiento del refugio le gana a la heurística de firma).
+        confirmations = get_confirmations(place_id)
+        if confirmations:
+            profiles = apply_confirmations(profiles, confirmations)
+
         save_official_profiles(place_id, profiles)
 
         return {
             "status": "trained",
             "profiles_saved": len(profiles),
+            "confirmations_applied": len(confirmations),
             "profile_names": [p["name"] for p in profiles.values()],
         }
 

@@ -124,6 +124,35 @@ def get_official_profiles(place_id: int) -> List[Dict[str, Any]]:
         return []
 
 
+def get_confirmations(place_id: int) -> List[Dict[str, Any]]:
+    """Confirmaciones del operador (eventos típicos etiquetados) — semilla semi-supervisada."""
+    try:
+        res = (
+            get_supabase().table("disaggregation_confirmations")
+            .select("mean_flow, duration_s, volume_liters, confirmed_label")
+            .eq("place_id", place_id)
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        print(f"[Confirm] no se pudieron leer confirmaciones place_id={place_id}: {e}")
+        return []
+
+
+def save_confirmation(place_id: int, mean_flow: float, duration_s: float,
+                      volume_liters: float, confirmed_label: str) -> Dict[str, Any]:
+    """Guarda una confirmación del operador (evento típico -> fixture real)."""
+    rec = {
+        "place_id": place_id,
+        "mean_flow": float(mean_flow),
+        "duration_s": float(duration_s),
+        "volume_liters": float(volume_liters),
+        "confirmed_label": str(confirmed_label),
+    }
+    res = get_supabase().table("disaggregation_confirmations").insert(rec).execute()
+    return res.data[0] if res.data else rec
+
+
 def save_official_profiles(place_id: int, profiles: Dict[int, Dict]) -> None:
     """
     Guarda perfiles marcándolos como oficiales.

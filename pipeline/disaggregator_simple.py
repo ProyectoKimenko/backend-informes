@@ -249,6 +249,49 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
     return profiles
 
 
+def _feat3(f: float, d: float, v: float) -> np.ndarray:
+    """Vector normalizado (caudal, duración, volumen) para distancias de calibración."""
+    return np.array([
+        f / FLOW_SCALE,
+        min(d, DUR_CAP) / DUR_SCALE,
+        np.log1p(max(v, 0.0)) * 1.5,   # log: el volumen tiene cola larga (duchas)
+    ])
+
+
+def apply_confirmations(profiles: Dict, confirmations: List[Dict]) -> Dict:
+    """Aplica las confirmaciones del operador (semi-supervisado, operador-in-the-loop).
+
+    Cada confirmación es un evento típico que el operador etiquetó con el fixture real
+    ({mean_flow, duration_s, volume_liters, confirmed_label}). Se asigna al perfil más
+    cercano en (caudal, duración, volumen) y el `label` del perfil pasa a ser el fixture
+    confirmado por MAYORÍA — el conocimiento del operador le gana a la heurística de
+    firma. Se mantiene `name` (la firma física, clave estable); solo cambia el `label`
+    visible (consistente con la edición manual de labels, que ya persiste).
+    """
+    if not confirmations or not profiles:
+        return profiles
+    plist = list(profiles.values())
+    P = np.array([
+        _feat3(float(p.get("mean_flow") or 0.0), float(p.get("mean_duration") or 0.0),
+               float(p.get("median_volume_l") or 0.0))
+        for p in plist
+    ])
+    from collections import Counter
+    votes: Dict[int, Counter] = {}
+    for c in confirmations:
+        lab = c.get("confirmed_label")
+        if not lab:
+            continue
+        cf = _feat3(float(c.get("mean_flow") or 0.0), float(c.get("duration_s") or 0.0),
+                    float(c.get("volume_liters") or 0.0))
+        j = int(np.argmin(np.linalg.norm(P - cf, axis=1)))
+        votes.setdefault(j, Counter())[lab] += 1
+    for j, cnt in votes.items():
+        plist[j]["label"] = cnt.most_common(1)[0][0]
+        print(f"[Confirm] perfil '{plist[j]['name']}' -> label operador '{plist[j]['label']}' ({sum(cnt.values())} confirmaciones)")
+    return profiles
+
+
 # -----------------------------------------------------------------------------
 # INFERENCIA — asignación por EVENTO en 2D (caudal, duración).
 # Cada evento segmentado se asigna al perfil 2D más cercano dentro de tolerancia;

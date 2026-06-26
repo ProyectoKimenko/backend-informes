@@ -1199,6 +1199,87 @@ def get_water_health(place_id: int, days: int = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/places/{place_id}/calibration-events")
+def get_calibration_events(place_id: int, n: int = 4):
+    """Eventos MÁS TÍPICOS de cada cluster para que el operador confirme el fixture.
+
+    Typicality sampling (Hacohen ICML 2022): para pocas confirmaciones gana mostrar
+    los eventos más REPRESENTATIVOS de cada cluster (cercanos al centroide), no los
+    ambiguos. El operador los etiqueta y eso refina el modelo (semi-supervisado)."""
+    sb = get_supabase()
+    try:
+        res = (
+            sb.table("disaggregation_events")
+            .select("id, device_name, flow_rate, duration_s, volume_liters, start_time")
+            .eq("place_id", place_id)
+            .neq("device_name", "No Detectado")
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return {"clusters": []}
+        df = pd.DataFrame(rows)
+        for c in ("flow_rate", "duration_s", "volume_liters"):
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+        df = df.dropna(subset=["flow_rate", "duration_s", "volume_liters"])
+
+        import numpy as _np
+        out = []
+        for label, g in df.groupby("device_name"):
+            med = g[["flow_rate", "duration_s", "volume_liters"]].median()
+            # distancia al centroide (mediana) en espacio normalizado log para dur/vol
+            d = (
+                ((g["flow_rate"] - med["flow_rate"]) / (med["flow_rate"] + 1.0)) ** 2
+                + (_np.log1p(g["duration_s"]) - _np.log1p(med["duration_s"])) ** 2
+                + (_np.log1p(g["volume_liters"]) - _np.log1p(med["volume_liters"])) ** 2
+            )
+            typ = g.assign(_d=d).nsmallest(max(1, n), "_d")
+            out.append({
+                "label": label,
+                "n_events": int(len(g)),
+                "signature": {
+                    "flow": round(float(med["flow_rate"]), 2),
+                    "duration_s": round(float(med["duration_s"]), 0),
+                    "volume_l": round(float(med["volume_liters"]), 2),
+                },
+                "events": [
+                    {
+                        "id": int(r["id"]),
+                        "start_time": r["start_time"],
+                        "flow": round(float(r["flow_rate"]), 2),
+                        "duration_s": round(float(r["duration_s"]), 0),
+                        "volume_l": round(float(r["volume_liters"]), 2),
+                    }
+                    for _, r in typ.iterrows()
+                ],
+            })
+        return {"clusters": out}
+    except Exception as e:
+        log_error(logger, f"calibration-events place {place_id}", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ConfirmEventRequest(BaseModel):
+    mean_flow: float
+    duration_s: float
+    volume_liters: float
+    confirmed_label: str
+
+
+@app.post("/api/places/{place_id}/confirm")
+def confirm_event(place_id: int, req: ConfirmEventRequest):
+    """El operador confirma el fixture real de un evento típico (semilla semi-supervisada)."""
+    from services.supabase_service import save_confirmation
+    try:
+        rec = save_confirmation(
+            place_id, req.mean_flow, req.duration_s, req.volume_liters, req.confirmed_label
+        )
+        return {"success": True, "confirmation": rec}
+    except Exception as e:
+        log_error(logger, f"confirm place {place_id}", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/places/{place_id}/disaggregation-profiles")
 def get_disaggregation_profiles(place_id: int):
     sb = get_supabase()
