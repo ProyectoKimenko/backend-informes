@@ -1172,24 +1172,58 @@ def get_water_health(place_id: int, days: int = 30):
     inodoro corriendo. Se reporta el piso típico entre noches y los litros/día que
     representa, para que el operador lo detecte temprano (es de los hallazgos de
     mayor valor en gestión hídrica)."""
-    LEAK_THRESHOLD_LMIN = 0.15  # ~216 L/día; sobre esto sospechamos consumo continuo
+    BETA = 0.11  # fracción del caudal medio que es consumo nocturno LEGÍTIMO (MNC=β·Q)
     sb = get_supabase()
     try:
         res = sb.rpc("water_health", {"p_place_id": place_id, "p_days": days}).execute()
         nights = res.data or []
-        bases = [float(n["base_lmin"]) for n in nights if n.get("base_lmin") is not None]
-        if not bases:
+        # nights viene ordenado por día DESC (recientes primero).
+        series = [(n["dia"], float(n["base_lmin"])) for n in nights if n.get("base_lmin") is not None]
+        if not series:
             return {"status": "sin_datos", "nights_analyzed": 0, "nights": nights}
+        bases = [b for _, b in series]
 
-        base_sostenida = sorted(bases)[len(bases) // 2]  # mediana del piso entre noches
-        nights_flagged = sum(1 for b in bases if b > LEAK_THRESHOLD_LMIN)
-        is_leak = base_sostenida > LEAK_THRESHOLD_LMIN
-        status = "fuga_probable" if is_leak else ("revisar" if nights_flagged else "ok")
+        # MNC = β·Q: consumo nocturno LEGÍTIMO esperado como fracción del caudal medio
+        # (outflow), umbral ADAPTATIVO por lugar en vez de fijo (Frontiers in Water 2025).
+        # La fuga = base medido - MNC. Piso mínimo para no marcar lugares de uso muy bajo.
+        try:
+            qres = sb.rpc("place_avg_flow", {"p_place_id": place_id, "p_days": days}).execute()
+            q_avg = float(qres.data[0]) if isinstance(qres.data, list) else float(qres.data or 0.0)
+        except Exception:
+            q_avg = 0.0
+        mnc = round(BETA * q_avg, 3)
+        threshold = round(max(mnc, 0.10), 3)
+
+        base_sostenida = sorted(bases)[len(bases) // 2]   # mediana del piso nocturno
+        leak_excess = max(0.0, base_sostenida - mnc)       # caudal de fuga estimado
+        nights_flagged = sum(1 for b in bases if b > threshold)
+
+        # CHANGE-POINT: ¿el caudal base SALTÓ de forma permanente (una fuga que
+        # apareció)? Compara la mediana de las noches recientes vs las anteriores
+        # (evita confundir un piso constante con uno que se disparó).
+        change = None
+        if len(series) >= 6:
+            half = len(series) // 2
+            recent = sorted(b for _, b in series[:half])
+            older = sorted(b for _, b in series[half:])
+            mr, mo = recent[len(recent) // 2], older[len(older) // 2]
+            if mr > mo + threshold and mr > threshold:
+                change = {"detectado": True, "desde": series[half][0],
+                          "antes_lmin": round(mo, 3), "ahora_lmin": round(mr, 3)}
+
+        is_leak = base_sostenida > threshold
+        status = ("fuga_probable" if (is_leak or change)
+                  else ("revisar" if nights_flagged else "ok"))
         return {
             "status": status,
             "base_flow_lmin": round(base_sostenida, 3),
-            "estimated_daily_waste_l": round(base_sostenida * 1440.0, 1),
-            "threshold_lmin": LEAK_THRESHOLD_LMIN,
+            "expected_night_lmin": mnc,                 # MNC = β·Q (consumo legítimo)
+            "q_avg_lmin": round(q_avg, 3),
+            "leak_flow_lmin": round(leak_excess, 3),
+            "estimated_daily_waste_l": round(leak_excess * 1440.0, 1),  # solo el EXCESO
+            "threshold_lmin": threshold,
+            "method": "MNC=beta*Q (beta=0.11) + change-point",
+            "change_point": change,
             "nights_analyzed": len(nights),
             "nights_flagged": nights_flagged,
             "nights": nights,
