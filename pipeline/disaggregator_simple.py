@@ -260,6 +260,31 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
     return profiles
 
 
+def _sustained_excess(excess: np.ndarray, index, min_s: float = 15.0,
+                      min_level: float = 1.5, noise: float = 0.3) -> np.ndarray:
+    """Del exceso (caudal - base) de un evento concurrente, conserva SOLO las jorobas
+    SOSTENIDAS (run contiguo >= min_s con pico >= min_level) — un segundo fixture real.
+    El resto (ruido puntual de la variación normal del fixture base sobre su mediana)
+    se anula → vuelve al fixture dominante. Sin esto, atribuir el exceso timestep a
+    timestep fragmentaba una ducha en cientos de micro-eventos de "Uso simultáneo"."""
+    out = np.zeros_like(excess)
+    active = excess > noise
+    n = len(excess)
+    i = 0
+    while i < n:
+        if not active[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and active[j]:
+            j += 1
+        dur = (index[j - 1] - index[i]).total_seconds() if (j - 1) > i else 0.0
+        if dur >= min_s and float(excess[i:j].max()) >= min_level:
+            out[i:j] = excess[i:j]
+        i = j
+    return out
+
+
 def _feat3(f: float, d: float, v: float) -> np.ndarray:
     """Vector normalizado (caudal, duración, volumen) para distancias de calibración."""
     return np.array([
@@ -350,16 +375,20 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
             if bool(ev.get("is_composite", False)):
                 vals = np.asarray(seg.values, dtype=float)
                 pos = vals[vals > 0]
-                base_level = float(np.percentile(pos, 20)) if pos.size else 0.0
-                # fixture dominante por (caudal base, duración)
+                # base = MEDIANA (robusta a la joroba breve del segundo fixture), no p20
+                # (que fugaba toda la variación normal del fixture base a "simultáneo").
+                base_level = float(np.median(pos)) if pos.size else 0.0
                 enb = _normalize(np.array([base_level]), np.array([ev["duration_s"]]))[0]
                 db = np.linalg.norm(cent_norm - enb, axis=1)
                 jb = int(np.argmin(db))
                 base_ok = base_level > 0 and (tol_nd[jb] <= 0 or db[jb] <= tol_nd[jb])
                 if base_ok:
-                    base_part = np.minimum(vals, base_level)
-                    df_result.loc[s:e, labels[jb]] += base_part
-                    df_result.loc[s:e, COMPOSITE] += vals - base_part
+                    excess = np.maximum(vals - base_level, 0.0)
+                    # solo el exceso SOSTENIDO (joroba real) es "Uso simultáneo"; el
+                    # ruido sobre la base vuelve al dominante -> sin fragmentación.
+                    hump = _sustained_excess(excess, seg.index)
+                    df_result.loc[s:e, labels[jb]] += vals - hump
+                    df_result.loc[s:e, COMPOSITE] += hump
                 else:
                     df_result.loc[s:e, COMPOSITE] += vals
                 residual[s:e] = 0.0
