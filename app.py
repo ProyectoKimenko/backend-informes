@@ -132,6 +132,10 @@ class TrainingWorkflowRequest(BaseModel):
     place_id: int
     start_time: str
     end_time: str
+    # Días mínimos con datos para permitir entrenar (gate). Default 21 (comportamiento
+    # normal); se puede bajar para reentrenar sobre un bloque reciente continuo más
+    # corto cuando la data no cubre 21 días seguidos.
+    min_days: int = 21
 
     @field_validator("start_time", "end_time")
     @classmethod
@@ -1186,7 +1190,7 @@ def trigger_training(req: TrainingWorkflowRequest, background_tasks: BackgroundT
     _job_set(task_id, status="queued", place_id=req.place_id)
     background_tasks.add_task(
         _run_job, task_id, train_and_refresh_disaggregation,
-        req.place_id, req.start_time, req.end_time,
+        req.place_id, req.start_time, req.end_time, req.min_days,
     )
     return {
         "task_id": task_id,

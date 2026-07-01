@@ -314,7 +314,7 @@ def backfill_disaggregated_readings(place_id: int, start_time: str | None = None
     }
 
 
-def train_and_refresh_disaggregation(place_id: int, start_time: str, end_time: str, progress_cb=None):
+def train_and_refresh_disaggregation(place_id: int, start_time: str, end_time: str, min_days: int = 21, progress_cb=None):
     try:
         start_dt = _parse_iso(start_time)
         end_dt = _parse_iso(end_time)
@@ -327,12 +327,12 @@ def train_and_refresh_disaggregation(place_id: int, start_time: str, end_time: s
             }
 
         available_days = _count_available_days(place_id, start_time, end_time)
-        if available_days < 21:
+        if available_days < min_days:
             return {
                 "place_id": place_id,
                 "status": "not_enough_days",
                 "available_days": available_days,
-                "required_days": 21,
+                "required_days": min_days,
             }
 
         if progress_cb:
