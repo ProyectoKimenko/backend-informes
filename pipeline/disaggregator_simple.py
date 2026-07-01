@@ -32,7 +32,7 @@ from pipeline.segmentation import (
     is_valid_event,
     integrate_volume,
 )
-from pipeline.signatures import label_by_signature, VOLUME_RANGE_BY_LABEL, COMPOSITE
+from pipeline.signatures import label_by_signature, label_by_fixtures, VOLUME_RANGE_BY_LABEL, COMPOSITE
 
 # Escalas fijas para hacer comparables caudal (L/min) y duración (s) en la distancia
 # 2D, sin necesidad de un StandardScaler persistido. ~45 s de duración "pesa" como
@@ -147,7 +147,18 @@ def _tolerances(centroids_norm: np.ndarray, frac: float = 8.0, floor: float = 12
 # -----------------------------------------------------------------------------
 # ENTRENAMIENTO
 # -----------------------------------------------------------------------------
-def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dict]:
+def train_disaggregator(df: pd.DataFrame, min_events: int = 20, fixtures: list = None) -> Dict[int, Dict]:
+    # fixtures: inventario declarado del recinto [{label, flow_lmin, volume_l, count}].
+    # Si viene, cada cluster se etiqueta por el artefacto REAL más cercano; si no, se
+    # usa la heurística física genérica label_by_signature (comportamiento previo).
+    def _label(sig):
+        mf, md, mv, cvv = sig
+        if fixtures:
+            lab = label_by_fixtures(mf, md, mv, cvv, fixtures)
+            if lab is not None:
+                return lab
+        return label_by_signature(mf, md, mv, cvv)
+
     df_proc = preprocess_signal(df)
     df_events = segment_events(df_proc)
     if len(df_events) < min_events:
@@ -205,7 +216,7 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20) -> Dict[int, Dic
     # que IGNORABAN el volumen y producían etiquetas físicamente imposibles.
     groups: Dict[str, List[int]] = {}
     for i in range(len(centroids)):
-        lab = label_by_signature(*_sig(assign0 == i))
+        lab = _label(_sig(assign0 == i))
         groups.setdefault(lab, []).append(i)
 
     m_cent, m_label = [], []

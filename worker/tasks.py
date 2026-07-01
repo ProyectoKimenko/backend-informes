@@ -235,9 +235,14 @@ def train_model(place_id: int, start_time: str, end_time: str):
             return {"status": "no_data"}
 
         from pipeline.disaggregator_simple import train_disaggregator, apply_confirmations
-        from services.supabase_service import get_confirmations
+        from services.supabase_service import get_confirmations, get_place_fixtures
 
-        profiles = train_disaggregator(df)
+        # Inventario declarado del recinto: si existe, etiqueta los clusters por el
+        # artefacto REAL más cercano en vez de la heurística física genérica.
+        fixtures = get_place_fixtures(place_id)
+        if fixtures:
+            print(f"[TrainSimple] usando inventario del recinto ({len(fixtures)} artefactos declarados)")
+        profiles = train_disaggregator(df, fixtures=fixtures)
 
         if not profiles:
             return {"status": "no_patterns_found"}

@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
+from datetime import datetime, timezone
 import pandas as pd
 import os
 
@@ -403,6 +404,28 @@ def save_disaggregation_result(
     except Exception as e:
         print(f"[ERROR] Failed to save events for place_id={place_id}: {e}")
         raise
+
+
+def get_place_fixtures(place_id: int) -> List[Dict[str, Any]]:
+    """Inventario de artefactos declarado del recinto (place_config.fixtures).
+    Devuelve [] si no hay config — el entrenamiento cae a la heurística física."""
+    sb = get_supabase()
+    try:
+        res = sb.table("place_config").select("fixtures").eq("place_id", place_id).limit(1).execute()
+        if res.data and isinstance(res.data[0].get("fixtures"), list):
+            return res.data[0]["fixtures"]
+    except Exception as e:
+        print(f"[Config] get_place_fixtures place_id={place_id} falló: {e}")
+    return []
+
+
+def save_place_fixtures(place_id: int, fixtures: List[Dict[str, Any]]) -> None:
+    """Guarda (upsert) el inventario de artefactos del recinto."""
+    sb = get_supabase()
+    sb.table("place_config").upsert(
+        {"place_id": place_id, "fixtures": fixtures, "updated_at": datetime.now(timezone.utc).isoformat()},
+        on_conflict="place_id",
+    ).execute()
 
 
 def get_all_places() -> List[Dict[str, Any]]:

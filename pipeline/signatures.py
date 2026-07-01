@@ -18,7 +18,43 @@ Se quitan del vocabulario los fixtures imposibles en un refugio de montaña
 (lavadora, lavavajillas, riego), que antes absorbían duchas largas y otros usos.
 """
 
+import math
+
 UNCLASSIFIED = "Sin clasificar"
+
+
+def label_by_fixtures(median_flow, median_duration, median_volume, cv_volume, fixtures):
+    """Etiqueta un cluster por el ARTEFACTO DECLARADO más cercano del inventario del
+    recinto, en vez de las bandas heurísticas de label_by_signature.
+
+    fixtures: lista de dicts {label, flow_lmin, volume_l, count?} declarados por el
+    operador. Match por caudal + volumen (log) normalizados por error RELATIVO — así
+    "Ducha 9 L/min ~40 L" ancla los clusters de ese caudal/volumen a la firma REAL del
+    recinto. Si nada cae dentro de tolerancia → UNCLASSIFIED (honesto). Devuelve None si
+    no hay inventario, para que el caller use label_by_signature (fallback).
+    """
+    if not fixtures:
+        return None
+    f, v = median_flow, max(median_volume, 0.0)
+    best_label, best_d = None, None
+    for fx in fixtures:
+        try:
+            fx_flow = float(fx.get("flow_lmin") or 0.0)
+            fx_vol = float(fx.get("volume_l") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if fx_flow <= 0:
+            continue
+        # error relativo de caudal (primario) + de volumen en log (secundario, cola larga)
+        df = (f - fx_flow) / max(fx_flow, 1.0)
+        dv = (math.log1p(v) - math.log1p(fx_vol)) / max(math.log1p(fx_vol), 0.5) if fx_vol > 0 else 0.0
+        d = math.sqrt(df * df + 0.5 * dv * dv)
+        if best_d is None or d < best_d:
+            best_d, best_label = d, fx.get("label")
+    # tolerancia ~ 60% de error combinado; más allá, no se parece a ningún artefacto real.
+    if best_label and best_d is not None and best_d <= 0.6:
+        return best_label
+    return UNCLASSIFIED
 
 # Evento que es SUPERPOSICIÓN de >=2 fixtures concurrentes (p.ej. ducha + grifo a la
 # vez). Con un solo sensor de caudal NO se puede separar de forma fiable, así que se

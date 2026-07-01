@@ -1426,3 +1426,37 @@ def update_disaggregation_profile_label(
         "success": True,
         "profile": response.data[0],
     }
+
+
+# ---------------------------------------------------------------------------
+# Config por recinto: inventario de artefactos (dirige el etiquetado de clusters).
+# ---------------------------------------------------------------------------
+class PlaceFixture(BaseModel):
+    label: str
+    count: int = 1
+    flow_lmin: float
+    volume_l: float = 0.0
+
+
+class PlaceConfigRequest(BaseModel):
+    fixtures: list[PlaceFixture]
+
+
+@app.get("/api/places/{place_id}/config")
+def get_place_config(place_id: int):
+    from services.supabase_service import get_place_fixtures
+    return {"place_id": place_id, "fixtures": get_place_fixtures(place_id)}
+
+
+@app.put("/api/places/{place_id}/config")
+def put_place_config(place_id: int, req: PlaceConfigRequest):
+    from services.supabase_service import save_place_fixtures
+    fixtures = [f.model_dump() for f in req.fixtures]
+    # Validación mínima: caudal > 0 (es lo que ancla el match).
+    fixtures = [f for f in fixtures if float(f.get("flow_lmin") or 0) > 0 and (f.get("label") or "").strip()]
+    try:
+        save_place_fixtures(place_id, fixtures)
+    except Exception as e:
+        log_error(logger, "saving place config", e)
+        raise HTTPException(status_code=500, detail="No se pudo guardar la config")
+    return {"success": True, "place_id": place_id, "fixtures": fixtures}
