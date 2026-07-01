@@ -558,19 +558,25 @@ async def data_freshness(max_age_s: int = 300):
     cron de Dokploy): es el modo de falla más probable y hoy era invisible (los
     endpoints /monitors leían claves Redis que nadie escribe)."""
     try:
-        rows = (
-            supabase.table("measurements_realtime")
-            .select("place_id, timestamp")
-            .order("timestamp", desc=True)
-            .limit(50)
-            .execute()
-        ).data or []
+        # Consulta POR place (limit 1, usa el índice place_id+timestamp) en vez de un
+        # ORDER BY timestamp global sobre ~1.6M filas, que hacía timeout -> 503 falso.
         now = datetime.now(timezone.utc)
+        place_rows = (supabase.table("places").select("id").execute()).data or []
         latest_by_place: dict[int, str] = {}
-        for r in rows:
-            pid = r.get("place_id")
-            if pid is not None and pid not in latest_by_place:
-                latest_by_place[pid] = r.get("timestamp")
+        for p in place_rows:
+            pid = p.get("id")
+            if pid is None:
+                continue
+            r = (
+                supabase.table("measurements_realtime")
+                .select("timestamp")
+                .eq("place_id", pid)
+                .order("timestamp", desc=True)
+                .limit(1)
+                .execute()
+            ).data
+            if r:
+                latest_by_place[pid] = r[0].get("timestamp")
         places = []
         freshest_age = None
         for pid, ts in latest_by_place.items():
