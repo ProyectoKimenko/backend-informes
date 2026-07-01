@@ -177,11 +177,36 @@ def detect_composite(
     return False
 
 
+def _split_by_gaps(seg: "pd.Series", gap_threshold_s: float = 45.0) -> List[Tuple[pd.Timestamp, pd.Timestamp]]:
+    """Corta un tramo activo donde hay un HUECO de datos (Δt entre muestras
+    consecutivas > gap_threshold_s). Si el scraper se cae, un uso activo antes y otro
+    después del hueco quedan unidos en UN evento cuya duración incluye el hueco (p.ej.
+    +2 h) → feature corrupta → mal clasificado ("Riego"/"Goteo") y persistido para
+    siempre. La cadencia real es ~1 Hz (p99 ~1.7 s), así que 45 s no corta datos
+    legítimos y sí atrapa caídas reales. El volumen ya no se infla (gap_cap en
+    integrate_volume), pero la duración sí: por eso se corta aquí."""
+    n = len(seg)
+    if n == 0:
+        return []
+    if n < 2:
+        return [(seg.index[0], seg.index[-1])]
+    idx = seg.index
+    dt = idx.to_series().diff().dt.total_seconds().to_numpy()
+    cuts = [0] + [i for i in range(1, n) if dt[i] > gap_threshold_s] + [n]
+    ranges: List[Tuple[pd.Timestamp, pd.Timestamp]] = []
+    for k in range(len(cuts) - 1):
+        a, b = cuts[k], cuts[k + 1] - 1
+        if b > a:
+            ranges.append((idx[a], idx[b]))
+    return ranges
+
+
 def segment_events(
     df_proc: pd.DataFrame,
     min_flow: float = 0.5,
     split_internal_changes: bool = True,
     delta_split_threshold: float = 1.0,
+    gap_threshold_s: float = 45.0,
 ) -> pd.DataFrame:
     """Segmenta la señal en eventos y extrae features por evento."""
     flow = df_proc["flow_smooth"]
@@ -198,82 +223,85 @@ def segment_events(
 
     rows = []
 
-    for s, e in zip(starts, ends):
-        base_seg = flow[s:e]
-        duration = (e - s).total_seconds()
+    for s0, e0 in zip(starts, ends):
+        # Primero cortar por HUECOS de datos: un tramo "activo" que cruza una caída del
+        # scraper no es un evento continuo. Cada trozo sin hueco se procesa aparte.
+        for s, e in _split_by_gaps(flow[s0:e0], gap_threshold_s=gap_threshold_s):
+            base_seg = flow[s:e]
+            duration = (e - s).total_seconds()
 
-        if duration < 5 or base_seg.mean() < min_flow:
-            continue
-
-        # ¿Superposición de fixtures concurrentes? Se evalúa sobre el tramo activo
-        # COMPLETO, antes de partir: el split por derivada cortaría la joroba en
-        # subsegmentos con caudal combinado (igual de inflados y mal-etiquetados).
-        is_comp = detect_composite(base_seg, min_flow)
-
-        if is_comp:
-            # Concurrente: se emite ENTERO y marcado (se excluye del entrenamiento y
-            # va a la categoría "Uso simultáneo" en inferencia, no a un fixture).
-            segment_ranges = [(s, e)]
-        elif split_internal_changes:
-            segment_ranges = _split_long_segment(
-                base_seg,
-                delta_threshold=delta_split_threshold,
-                min_subsegment_seconds=5,
-            )
-        else:
-            segment_ranges = [(s, e)]
-
-        for ss, ee in segment_ranges:
-            seg = flow[ss:ee]
-            duration = (ee - ss).total_seconds()
-
-            if duration < 5 or seg.mean() < min_flow:
+            if duration < 5 or base_seg.mean() < min_flow:
                 continue
 
-            hour = ss.hour
-            mflow = float(seg.mean())
-            sflow = float(seg.std()) if len(seg) > 1 else 0.0
-            vals = np.asarray(seg.values, dtype=float)
-            peak = float(seg.max())
+            # ¿Superposición de fixtures concurrentes? Se evalúa sobre el tramo activo
+            # COMPLETO, antes de partir: el split por derivada cortaría la joroba en
+            # subsegmentos con caudal combinado (igual de inflados y mal-etiquetados).
+            is_comp = detect_composite(base_seg, min_flow)
 
-            # Caudal MODAL: el caudal más frecuente dentro del evento (binneado a
-            # 0.5 L/min). Discrimina fixtures de caudal nominal FIJO (válvula de
-            # inodoro, cabezal de ducha) mejor que la media — feature estándar de
-            # Autoflow/CIWS (Nguyen/Stewart/Beal; Attallah 2021, ~98% con peak+modo).
-            if len(vals):
-                binned = np.round(vals * 2.0) / 2.0
-                uq, cnt = np.unique(binned, return_counts=True)
-                modal_flow = float(uq[int(np.argmax(cnt))])
+            if is_comp:
+                # Concurrente: se emite ENTERO y marcado (se excluye del entrenamiento y
+                # va a la categoría "Uso simultáneo" en inferencia, no a un fixture).
+                segment_ranges = [(s, e)]
+            elif split_internal_changes:
+                segment_ranges = _split_long_segment(
+                    base_seg,
+                    delta_threshold=delta_split_threshold,
+                    min_subsegment_seconds=5,
+                )
             else:
-                modal_flow = mflow
+                segment_ranges = [(s, e)]
 
-            # Gradientes de los flancos (forma rise/plateau/fall del evento).
-            k = min(3, len(vals) - 1) if len(vals) > 1 else 1
-            rise_grad = float((vals[k] - vals[0]) / k) if len(vals) > 1 else 0.0
-            fall_grad = float((vals[-1] - vals[-1 - k]) / k) if len(vals) > 1 else 0.0
+            for ss, ee in segment_ranges:
+                seg = flow[ss:ee]
+                duration = (ee - ss).total_seconds()
 
-            rows.append({
-                "mean_flow": mflow,
-                "duration_s": float(duration),
-                # VOLUMEN integrado por Δt real (litros): el discriminador físico #1.
-                "volume_liters": integrate_volume(seg),
-                "peak_flow": peak,
-                "modal_flow": modal_flow,              # caudal nominal (Autoflow/CIWS)
-                "peak_to_mean": (peak / mflow) if mflow > 0 else 1.0,
-                "rise_grad": rise_grad,
-                "fall_grad": fall_grad,
-                # CV intra-evento: bajo = caudal estable (fixture automático/cisterna),
-                # alto = caudal variable (uso manual de grifo).
-                "cv_flow": (sflow / mflow) if mflow > 0 else 0.0,
-                "std_flow": sflow,
-                "hour_sin": float(np.sin(2 * np.pi * hour / 24)),
-                "hour_cos": float(np.cos(2 * np.pi * hour / 24)),
-                # True = superposición de fixtures concurrentes (no separable con un
-                # solo sensor): se excluye del entrenamiento y se marca "Uso simultáneo".
-                "is_composite": bool(is_comp),
-                "start_time": ss,
-                "end_time": ee,
-            })
+                if duration < 5 or seg.mean() < min_flow:
+                    continue
+
+                hour = ss.hour
+                mflow = float(seg.mean())
+                sflow = float(seg.std()) if len(seg) > 1 else 0.0
+                vals = np.asarray(seg.values, dtype=float)
+                peak = float(seg.max())
+
+                # Caudal MODAL: el caudal más frecuente dentro del evento (binneado a
+                # 0.5 L/min). Discrimina fixtures de caudal nominal FIJO (válvula de
+                # inodoro, cabezal de ducha) mejor que la media — feature estándar de
+                # Autoflow/CIWS (Nguyen/Stewart/Beal; Attallah 2021, ~98% con peak+modo).
+                if len(vals):
+                    binned = np.round(vals * 2.0) / 2.0
+                    uq, cnt = np.unique(binned, return_counts=True)
+                    modal_flow = float(uq[int(np.argmax(cnt))])
+                else:
+                    modal_flow = mflow
+
+                # Gradientes de los flancos (forma rise/plateau/fall del evento).
+                k = min(3, len(vals) - 1) if len(vals) > 1 else 1
+                rise_grad = float((vals[k] - vals[0]) / k) if len(vals) > 1 else 0.0
+                fall_grad = float((vals[-1] - vals[-1 - k]) / k) if len(vals) > 1 else 0.0
+
+                rows.append({
+                    "mean_flow": mflow,
+                    "duration_s": float(duration),
+                    # VOLUMEN integrado por Δt real (litros): el discriminador físico #1.
+                    "volume_liters": integrate_volume(seg),
+                    "peak_flow": peak,
+                    "modal_flow": modal_flow,              # caudal nominal (Autoflow/CIWS)
+                    "peak_to_mean": (peak / mflow) if mflow > 0 else 1.0,
+                    "rise_grad": rise_grad,
+                    "fall_grad": fall_grad,
+                    # CV intra-evento: bajo = caudal estable (fixture automático/cisterna),
+                    # alto = caudal variable (uso manual de grifo).
+                    "cv_flow": (sflow / mflow) if mflow > 0 else 0.0,
+                    "std_flow": sflow,
+                    "hour_sin": float(np.sin(2 * np.pi * hour / 24)),
+                    "hour_cos": float(np.cos(2 * np.pi * hour / 24)),
+                    # True = superposición de fixtures concurrentes (no separable con un
+                    # solo sensor): se excluye del entrenamiento y se marca "Uso simultáneo".
+                    "is_composite": bool(is_comp),
+                    "start_time": ss,
+                    "end_time": ee,
+                })
 
     return pd.DataFrame(rows)
 

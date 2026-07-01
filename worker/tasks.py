@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
@@ -7,6 +7,7 @@ from services.supabase_service import (
     fetch_measurements,
     get_official_profiles,
     save_disaggregation_result,
+    purge_disaggregation_range,
     get_all_places,
     bulk_insert_dissagregated,
     save_official_profiles,
@@ -81,7 +82,7 @@ def _count_available_days(place_id: int, start_time: str, end_time: str) -> int:
 def process_disaggregation(place_id: int, start_time: str | None = None, end_time: str | None = None, progress_cb=None):
     try:
         if not start_time or not end_time:
-            end_dt = datetime.utcnow()
+            end_dt = datetime.now(timezone.utc)
             start_dt = end_dt - timedelta(days=1)
             start_time = start_dt.isoformat()
             end_time = end_dt.isoformat()
@@ -132,6 +133,13 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
                 "smoothing_loss_pct": round(smoothing_loss_pct, 3),
                 "events_detected": len(df_events),
             })
+
+        # REEMPLAZO por rango: purga eventos+readings del rango ANTES de reinsertar,
+        # para que el reprocess sea idempotente (REPLACE) y no acumule filas huérfanas
+        # que inflaban los litros. Se hace aquí (no al inicio) para no borrar datos si
+        # antes se cortó por no_model/no_data. backfill_disaggregated_readings reescribe
+        # los readings del mismo rango a continuación.
+        purge_disaggregation_range(place_id, start_time, end_time)
 
         save_disaggregation_result(
             place_id,
@@ -187,7 +195,7 @@ def process_all_places():
     escala actual (pocos places) es robusto y suficiente, sin cola distribuida."""
     places = get_all_places()
 
-    end_time = datetime.utcnow()
+    end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(days=1)
     start_iso, end_iso = start_time.isoformat(), end_time.isoformat()
 

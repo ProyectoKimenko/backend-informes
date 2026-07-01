@@ -316,6 +316,29 @@ def _build_no_detected_events(
     return records
 
 
+def purge_disaggregation_range(place_id: int, start_time: str, end_time: str) -> dict:
+    """Borra eventos + readings de [start_time, end_time] para un place, vía RPC
+    SECURITY DEFINER (el backend usa el rol anon, al que se le revocó DELETE).
+
+    Es el paso de REEMPLAZO transaccional: se llama justo antes de reinsertar el
+    rango, para que cada reprocess sea un REPLACE y no acumule filas huérfanas. Sin
+    esto, el reprocess horario de la ventana deslizante re-segmenta los bordes con
+    fronteras levemente distintas → el upsert (que nunca borra) deja el evento viejo
+    huérfano y el backfill suma ambos → inflación de litros (~70-80% medido).
+    """
+    sb = get_supabase()
+    try:
+        resp = sb.rpc("purge_disaggregation_range", {
+            "p_place_id": place_id,
+            "p_start": start_time,
+            "p_end": end_time,
+        }).execute()
+        return resp.data if isinstance(resp.data, dict) else {"result": resp.data}
+    except Exception as e:
+        print(f"[Purge] place_id={place_id} [{start_time}..{end_time}] falló: {e}")
+        raise
+
+
 def save_disaggregation_result(
     place_id: int,
     df_events: pd.DataFrame,

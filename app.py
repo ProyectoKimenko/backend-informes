@@ -549,6 +549,49 @@ supabase = get_supabase()  # singleton (prefiere service_role)
 def ping():
     return {"status": "success", "message": "Pong"}
 
+
+@app.get("/health/data-freshness")
+async def data_freshness(max_age_s: int = 300):
+    """Frescura de la ingesta: compara max(timestamp) de measurements_realtime vs
+    ahora. Devuelve 200 si algún place ingirió datos hace < max_age_s, 503 si TODOS
+    están stale (scraper caído/zombi). Pensado para un monitor externo (Uptime Kuma /
+    cron de Dokploy): es el modo de falla más probable y hoy era invisible (los
+    endpoints /monitors leían claves Redis que nadie escribe)."""
+    try:
+        rows = (
+            supabase.table("measurements_realtime")
+            .select("place_id, timestamp")
+            .order("timestamp", desc=True)
+            .limit(50)
+            .execute()
+        ).data or []
+        now = datetime.now(timezone.utc)
+        latest_by_place: dict[int, str] = {}
+        for r in rows:
+            pid = r.get("place_id")
+            if pid is not None and pid not in latest_by_place:
+                latest_by_place[pid] = r.get("timestamp")
+        places = []
+        freshest_age = None
+        for pid, ts in latest_by_place.items():
+            try:
+                age = (now - pd.to_datetime(ts, utc=True).to_pydatetime()).total_seconds()
+            except Exception:
+                continue
+            places.append({"place_id": pid, "last_ts": ts, "age_s": round(age)})
+            freshest_age = age if freshest_age is None else min(freshest_age, age)
+        fresh = freshest_age is not None and freshest_age < max_age_s
+        body = {
+            "status": "fresh" if fresh else "stale",
+            "max_age_s": max_age_s,
+            "freshest_age_s": round(freshest_age) if freshest_age is not None else None,
+            "places": places,
+        }
+        return JSONResponse(body, status_code=200 if fresh else 503)
+    except Exception as e:
+        log_error(logger, "data freshness check", e)
+        return JSONResponse({"status": "error", "detail": "check failed"}, status_code=503)
+
 @app.get("/places", response_class=JSONResponse)
 async def get_places():
     """Devuelve la lista de lugares desde la tabla 'places'."""
@@ -926,7 +969,7 @@ def trigger(place_id: int, background_tasks: BackgroundTasks):
 @app.post("/api/disaggregate/trigger")
 async def trigger_disaggregation(request: DisaggregationRequest, background_tasks: BackgroundTasks):
     if not request.start_time or not request.end_time:
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(hours=1)
         request.start_time = start_time.isoformat()
         request.end_time = end_time.isoformat()
@@ -956,7 +999,7 @@ async def get_task_status(task_id: str):
 
 @app.post("/api/disaggregate/last-hour/{place_id}")
 async def trigger_last_hour(place_id: int, background_tasks: BackgroundTasks):
-    end_time = datetime.now()
+    end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(hours=1)
 
     task_id = _new_task_id()

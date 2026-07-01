@@ -32,3 +32,9 @@
 **/values.dev.yaml
 LICENSE
 README.md
+# artefactos pesados que no deben ir a la imagen (el COPY . . los arrastraba)
+**/.venv-nilm
+**/Dataset
+**/matplotlib_cache
+**/celerybeat-schedule
+**/backups
