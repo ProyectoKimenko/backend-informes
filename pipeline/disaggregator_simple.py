@@ -339,11 +339,29 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
         for _, ev in df_seg.iterrows():
             s, e = ev["start_time"], ev["end_time"]
             seg = residual[s:e]
-            # EVENTO CONCURRENTE: superposición de >=2 fixtures, no separable con un
-            # solo sensor. Se atribuye entero a "Uso simultáneo" (honesto, conserva
-            # masa) en vez de forzar un fixture con caudal/volumen inflados.
+            # EVENTO CONCURRENTE (superposición de >=2 fixtures). ATRIBUCIÓN PARCIAL:
+            # el caudal BASE continuo (el fixture dominante, p.ej. una ducha) se atribuye
+            # a su categoría, y solo el EXCESO por encima de la base (la joroba del
+            # segundo uso) va a "Uso simultáneo". Antes se mandaba el evento ENTERO a
+            # "Uso simultáneo", así una ducha con una descarga breve encima volcaba TODA
+            # su agua a simultáneo (inflaba esa categoría a ~47%). Conserva masa
+            # (base+exceso=caudal) y hace que un falso positivo del detector solo filtre
+            # una porción chica, no la ducha completa.
             if bool(ev.get("is_composite", False)):
-                df_result.loc[s:e, COMPOSITE] += seg.values
+                vals = np.asarray(seg.values, dtype=float)
+                pos = vals[vals > 0]
+                base_level = float(np.percentile(pos, 20)) if pos.size else 0.0
+                # fixture dominante por (caudal base, duración)
+                enb = _normalize(np.array([base_level]), np.array([ev["duration_s"]]))[0]
+                db = np.linalg.norm(cent_norm - enb, axis=1)
+                jb = int(np.argmin(db))
+                base_ok = base_level > 0 and (tol_nd[jb] <= 0 or db[jb] <= tol_nd[jb])
+                if base_ok:
+                    base_part = np.minimum(vals, base_level)
+                    df_result.loc[s:e, labels[jb]] += base_part
+                    df_result.loc[s:e, COMPOSITE] += vals - base_part
+                else:
+                    df_result.loc[s:e, COMPOSITE] += vals
                 residual[s:e] = 0.0
                 n_comp += 1
                 continue
