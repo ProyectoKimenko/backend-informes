@@ -55,33 +55,37 @@ def fetch_measurements(place_id: int, start_time: str, end_time: str, batch_size
     sb = get_supabase()
 
     all_rows = []
-    offset = 0
+    # CHUNK POR DÍA: acota el OFFSET a ~1 día de filas (~86k a 1 Hz). El offset global
+    # sobre rangos largos (p.ej. 30 días = 2.6M filas) hacía que cada página escaneara
+    # y descartara N filas crecientes (O(n²)) hasta superar el timeout de PostgREST →
+    # "Server disconnected". Con chunks diarios el offset máximo por día es chico y
+    # constante, y el índice de timestamp sirve el rango. Habilita reentrenar sobre
+    # rangos largos sin reventar.
+    start_dt = pd.to_datetime(start_time, utc=True)
+    end_dt = pd.to_datetime(end_time, utc=True)
 
-    while True:
-        response = (
-            sb.table("measurements_realtime")
-            .select("*")
-            .eq("place_id", place_id)
-            .gte("timestamp", start_time)
-            .lte("timestamp", end_time)
-            .order("timestamp")
-            .range(offset, offset + batch_size - 1)
-            .execute()
-        )
-
-        rows = response.data
-
-        if not rows:
-            break
-
-        all_rows.extend(rows)
-        print(f"[fetch] place_id={place_id} offset={offset} filas={len(rows)} acumulado={len(all_rows)}")
-
-        # Si devolvió menos del batch completo no hay más páginas
-        if len(rows) < batch_size:
-            break
-
-        offset += batch_size
+    day = start_dt
+    while day < end_dt:
+        day_end = min(day + pd.Timedelta(days=1), end_dt)
+        is_last = day_end >= end_dt
+        offset = 0
+        while True:
+            q = (
+                sb.table("measurements_realtime")
+                .select("*")
+                .eq("place_id", place_id)
+                .gte("timestamp", day.isoformat())
+            )
+            # rango semiabierto [day, day_end) salvo el último chunk (cerrado en end).
+            q = q.lte("timestamp", day_end.isoformat()) if is_last else q.lt("timestamp", day_end.isoformat())
+            rows = q.order("timestamp").range(offset, offset + batch_size - 1).execute().data
+            if not rows:
+                break
+            all_rows.extend(rows)
+            if len(rows) < batch_size:
+                break
+            offset += batch_size
+        day = day_end
 
     if not all_rows:
         return pd.DataFrame()
