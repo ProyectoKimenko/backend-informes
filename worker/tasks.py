@@ -195,9 +195,16 @@ def process_all_places():
     escala actual (pocos places) es robusto y suficiente, sin cola distribuida."""
     places = get_all_places()
 
-    end_time = datetime.now(timezone.utc)
-    start_time = end_time - timedelta(days=1)
-    start_iso, end_iso = start_time.isoformat(), end_time.isoformat()
+    # Ventana ALINEADA A DÍA (borde trasero FIJO en ayer 00:00 UTC), no deslizante.
+    # La vieja ventana [now-24h, now] tenía el borde trasero MÓVIL: un evento que lo
+    # cruzaba se truncaba, y al avanzar la ventana la próxima hora ese evento truncado
+    # quedaba ANTES del nuevo rango de purga (que borra por start_time in [start,end)),
+    # así sobrevivía como HUÉRFANO mientras se creaba una copia nueva → litros inflados
+    # hasta +60%/día. Con el borde trasero fijo en 00:00, cada corrida purga y reemplaza
+    # [ayer00:00, now] ENTERO: idempotente, sin acumulación de huérfanos.
+    now = datetime.now(timezone.utc)
+    start_time = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_iso, end_iso = start_time.isoformat(), now.isoformat()
 
     processed = 0
     for place in places:
