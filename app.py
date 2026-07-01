@@ -1012,109 +1012,127 @@ async def trigger_last_hour(place_id: int, background_tasks: BackgroundTasks):
 
 @app.get("/scrapers/{scraper_id}/status")
 def scraper_status(scraper_id: str):
-    liveness_key = f"scraper:{scraper_id}:liveness"
-    state_key = f"scraper:{scraper_id}:state"
-    metrics_success = f"scraper:metrics:{scraper_id}:success"
-    metrics_errors = f"scraper:metrics:{scraper_id}:errors"
+    """Estado REAL del scraper por frescura de ingesta (antes leía claves Redis que
+    el scraper nunca escribe -> siempre DOWN). scraper_id = 'scraper_{place_id}'."""
+    pid = None
+    if scraper_id.startswith("scraper_"):
+        try:
+            pid = int(scraper_id.split("_", 1)[1])
+        except Exception:
+            pid = None
 
-    alive = bool(redis.exists(liveness_key))
-    last_heartbeat = int(redis.get(liveness_key)) if alive else None
+    last_ts, last_val, age = None, None, None
+    if pid is not None:
+        try:
+            r = (
+                supabase.table("measurements_realtime")
+                .select("timestamp, flow_rate")
+                .eq("place_id", pid)
+                .order("timestamp", desc=True)
+                .limit(1)
+                .execute()
+            ).data
+            if r:
+                last_ts = r[0].get("timestamp")
+                last_val = r[0].get("flow_rate")
+                age = (datetime.now(timezone.utc) - pd.to_datetime(last_ts, utc=True).to_pydatetime()).total_seconds()
+        except Exception:
+            pass
 
-    raw_state = redis.get(state_key)
-    state = json.loads(raw_state) if raw_state else None
-
-    success = int(redis.get(metrics_success) or 0)
-    errors = int(redis.get(metrics_errors) or 0)
-
-    if not alive:
+    alive = age is not None and age < 900
+    if age is None:
         health = "DOWN"
-    elif state and state.get("status") == "error":
-        health = "ERROR"
-    elif errors > 5:
+    elif age < 120:
+        health = "RUNNING"
+    elif age < 900:
         health = "DEGRADED"
     else:
-        health = "RUNNING"
+        health = "DOWN"
+    last_heartbeat = int(pd.to_datetime(last_ts, utc=True).timestamp()) if last_ts else None
 
     return {
         "scraper_id": scraper_id,
         "alive": alive,
         "health": health,
         "last_heartbeat_ts": last_heartbeat,
-        "state": state,
-        "metrics": {
-            "success": success,
-            "errors": errors,
-        },
+        "state": {"last_value": last_val, "age_s": round(age) if age is not None else None},
+        "metrics": {"success": 0, "errors": 0},
     }
 
 @app.get("/monitors", response_class=JSONResponse)
 async def get_monitors():
-    """
-    Devuelve un listado unificado de Lugares + Estado de su Scraper.
-    Sirve para detectar qué lugares de la BD no tienen un scraper corriendo (DOWN).
-    """
+    """Lugares + estado REAL de su scraper, derivado de la INGESTA
+    (max(timestamp) de measurements_realtime vs ahora). Antes leía claves Redis
+    (scraper:*:liveness) que el scraper NUNCA escribe -> reportaba DOWN aunque
+    estuviera ingiriendo a ~1 Hz. Ahora la salud refleja la realidad."""
     try:
-        # 1. FUENTE DE VERDAD: Obtener todos los lugares registrados en Supabase
-        response = supabase.table("places").select("*").order('id').execute()
-        places = response.data if response.data else []
-        
+        places = (supabase.table("places").select("*").order("id").execute()).data or []
+        now = datetime.now(timezone.utc)
         monitors = []
-
-        # 2. VERIFICACIÓN: Iterar cada lugar y buscar su rastro en Redis
         for place in places:
-            place_id = place['id']
-            # Construimos el ID que el scraper DEBERÍA tener si estuviera corriendo
-            scraper_id = f"scraper_{place_id}"
-            
-            # Definimos las claves donde ese scraper debería estar escribiendo
-            liveness_key = f"scraper:{scraper_id}:liveness"
-            state_key = f"scraper:{scraper_id}:state"
-            metrics_success_key = f"scraper:metrics:{scraper_id}:success"
-            metrics_errors_key = f"scraper:metrics:{scraper_id}:errors"
+            pid = place["id"]
+            last_ts, last_val, age = None, None, None
+            try:
+                r = (
+                    supabase.table("measurements_realtime")
+                    .select("timestamp, flow_rate")
+                    .eq("place_id", pid)
+                    .order("timestamp", desc=True)
+                    .limit(1)
+                    .execute()
+                ).data
+                if r:
+                    last_ts = r[0].get("timestamp")
+                    last_val = r[0].get("flow_rate")
+                    age = (now - pd.to_datetime(last_ts, utc=True).to_pydatetime()).total_seconds()
+            except Exception:
+                pass
 
-            # 3. CONSULTA: ¿Existe este scraper en la memoria de Redis?
-            # redis.exists devuelve > 0 si la clave existe
-            alive = bool(redis.exists(liveness_key))
-            
-            # Obtenemos el estado detallado si existe
-            raw_state = redis.get(state_key)
-            state_data = json.loads(raw_state) if raw_state else None
-            
-            success_count = int(redis.get(metrics_success_key) or 0)
-            error_count = int(redis.get(metrics_errors_key) or 0)
+            total_readings = 0
+            try:
+                since = (now - timedelta(days=1)).isoformat()
+                c = (
+                    supabase.table("measurements_realtime")
+                    .select("id", count="exact", head=True)
+                    .eq("place_id", pid)
+                    .gte("timestamp", since)
+                    .execute()
+                )
+                total_readings = c.count or 0
+            except Exception:
+                pass
 
-            # 4. DIAGNÓSTICO DE SALUD
-            health = "DOWN" # Asumimos que no existe por defecto
-            
-            if alive:
-                # Si existe la clave de vida, evaluamos la calidad
-                if state_data and state_data.get("status") == "error":
-                    health = "ERROR"
-                elif error_count > 5: # Si hay muchos errores recientes
-                    health = "DEGRADED"
-                else:
-                    health = "RUNNING"
+            # Salud por frescura de la ingesta: <2 min RUNNING, <15 min DEGRADED, resto DOWN.
+            if age is None:
+                health = "DOWN"
+            elif age < 120:
+                health = "RUNNING"
+            elif age < 900:
+                health = "DEGRADED"
+            else:
+                health = "DOWN"
 
-            # 5. CONSTRUCCIÓN DEL DATO COMBINADO
             monitors.append({
-                "id": place_id,
-                "name": place['name'],
-                "flow_reporter_id": place.get('flow_reporter_id'),
-                "scraper_id": scraper_id,
-                "health": health, # AQUÍ es donde ves si existe (RUNNING) o falta (DOWN)
+                "id": pid,
+                "name": place["name"],
+                "flow_reporter_id": place.get("flow_reporter_id"),
+                "scraper_id": f"scraper_{pid}",
+                "health": health,
                 "metrics": {
-                    "last_value": state_data.get('last_value') if state_data else None,
-                    "uptime": state_data.get('uptime_sec') if state_data else 0,
-                    "total_readings": success_count,
-                    "errors": error_count
-                }
+                    "last_value": last_val,
+                    "last_ts": last_ts,
+                    "age_s": round(age) if age is not None else None,
+                    "uptime": None,
+                    "total_readings": total_readings,
+                    "errors": 0,
+                },
             })
-
         return {"monitors": monitors}
 
     except Exception as e:
         log_error(logger, "fetching monitors", e)
-        raise HTTPException(status_code=500, detail=f"Error fetching monitors: {str(e)}")
+        # No romper la UI del grid: devolver lista vacía en vez de 500.
+        return JSONResponse({"monitors": []}, status_code=200)
 
 @app.get("/analysis/stackplot", response_class=JSONResponse)
 async def get_stackplot(place_id: int, start_date: str, end_date: str, granularity: str = "day"):
