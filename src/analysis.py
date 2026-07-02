@@ -293,20 +293,25 @@ def analyze_data(window_size: int = 60, start_epoch: int = None, end_epoch: int 
     """
     supabase = get_supabase()  # singleton (prefiere service_role)
 
-    query = supabase.table("measurements").select("*")
-    if place_id is not None:
-        query = query.eq("place_id", place_id)
-    if start_epoch is not None:
-        query = query.gte("timestamp", start_epoch)
-        logger.debug(f"Filtering from timestamp {start_epoch}")
-    if end_epoch is not None:
-        query = query.lte("timestamp", end_epoch)
-        logger.debug(f"Filtering to timestamp {end_epoch}")
-    
-    response = query.execute()
-    data = pd.DataFrame(response.data)
-    
-    # Log resultado de consulta
-    log_data_operation(logger, "Database query", len(data), place_id)
-    
+    # Fuente VIVA: measurements_realtime (la tabla legacy `measurements` corta en
+    # dic-2025 → el análisis salía vacío para 2026). Downsample a minuto server-side
+    # via RPC flow_minute_avg (devuelve epoch-ms, encaja con analyze_data_from_df) —
+    # evita traer ~600k filas crudas por semana.
+    from datetime import datetime, timezone as _tz
+    if start_epoch is None or end_epoch is None or place_id is None:
+        return analyze_data_from_df(pd.DataFrame(), window_size, start_epoch, end_epoch)
+    start_iso = datetime.fromtimestamp(start_epoch / 1000.0, tz=_tz.utc).isoformat()
+    end_iso = datetime.fromtimestamp(end_epoch / 1000.0, tz=_tz.utc).isoformat()
+
+    response = supabase.rpc("flow_minute_avg", {
+        "p_place_id": place_id,
+        "p_start": start_iso,
+        "p_end": end_iso,
+    }).execute()
+    data = pd.DataFrame(response.data or [])
+    if not data.empty:
+        data = data.rename(columns={"ts_ms": "timestamp"})
+
+    log_data_operation(logger, "RPC flow_minute_avg", len(data), place_id)
+
     return analyze_data_from_df(data, window_size, start_epoch, end_epoch)

@@ -725,19 +725,19 @@ async def generate_weekly_pdf(
         total_start_epoch = int(week_ranges[0][0].timestamp() * 1000)
         total_end_epoch = int(week_ranges[-1][1].timestamp() * 1000)
         
-        query = supabase.table("measurements").select("*")
-        if place_id is not None:
-            query = query.eq("place_id", place_id)
-        query = query.gte("timestamp", total_start_epoch).lte("timestamp", total_end_epoch)
-        
-        response = query.execute()
-        all_data = pd.DataFrame(response.data)
+        # Fuente VIVA: measurements_realtime vía RPC de downsample a minuto (epoch-ms),
+        # misma que /analysis. Antes leía la tabla legacy 'measurements' (vacía en 2026).
+        s_iso = datetime.fromtimestamp(total_start_epoch / 1000.0, tz=timezone.utc).isoformat()
+        e_iso = datetime.fromtimestamp(total_end_epoch / 1000.0, tz=timezone.utc).isoformat()
+        response = supabase.rpc("flow_minute_avg", {
+            "p_place_id": place_id, "p_start": s_iso, "p_end": e_iso,
+        }).execute()
+        all_data = pd.DataFrame(response.data or [])
+        if not all_data.empty:
+            all_data = all_data.rename(columns={"ts_ms": "timestamp"})
 
-        # Fail-loud: sin datos en el período NO generamos un PDF engañoso. Antes se
-        # renderizaba igual con totales en 0 y "eficiencia" sin sentido, devolviendo
-        # HTTP 200 (el reporte "mentía"). NOTA: este endpoint aún lee la tabla legacy
-        # 'measurements' (vacía en 2026); el repunte a measurements_realtime queda
-        # pendiente — por ahora falla claro en vez de entregar un informe falso.
+        # Fail-loud: sin datos en el período NO generamos un PDF engañoso (antes
+        # renderizaba con totales en 0 y "eficiencia" sin sentido, devolviendo 200).
         if all_data.empty:
             raise HTTPException(
                 status_code=422,
