@@ -23,7 +23,7 @@ from src.analysis import analyze_data, analyze_data_from_df
 from src.report import Report
 from src.report_sections import WeekdaySection, WeekendSection, ComparisonSection
 from src.logger_config import setup_logger, log_request, log_error, log_data_operation, log_startup
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from worker.tasks import (
     train_and_refresh_disaggregation,
     infer_and_refresh,
@@ -134,8 +134,10 @@ class TrainingWorkflowRequest(BaseModel):
     end_time: str
     # Días mínimos con datos para permitir entrenar (gate). Default 21 (comportamiento
     # normal); se puede bajar para reentrenar sobre un bloque reciente continuo más
-    # corto cuando la data no cubre 21 días seguidos.
-    min_days: int = 21
+    # corto cuando la data no cubre 21 días seguidos. Piso duro server-side (ge=14):
+    # impide que un cliente pase min_days=0 y sobreescriba perfiles calibrados con
+    # basura entrenada sobre una ventana mínima.
+    min_days: int = Field(21, ge=14)
 
     @field_validator("start_time", "end_time")
     @classmethod

@@ -1,5 +1,5 @@
 from datetime import datetime
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 import tempfile
 import base64
@@ -12,7 +12,13 @@ class Report:
         self.title = title
         self.place_name = place_name
         self.sections = []
-        self.env = Environment(loader=FileSystemLoader(template_dir))
+        # autoescape ON: evita inyección de HTML/atributos vía valores como
+        # place_name (que el atacante controla vía POST /new_place) hacia el
+        # HTML que WeasyPrint renderiza — cierra el LFI (file://) y la SSRF.
+        self.env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=select_autoescape(['html', 'xml']),
+        )
         self.created_at = datetime.now()
         
         # Add logo path
