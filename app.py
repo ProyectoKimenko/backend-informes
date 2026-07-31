@@ -41,7 +41,16 @@ from services.supabase_service import get_supabase
 logger = setup_logger(__name__)
 
 # Initialize FastAPI app and templates
-app = FastAPI()
+# La documentación interactiva revela TODO el esquema de la API (rutas, modelos,
+# ejemplos) a cualquiera. Se cierra por defecto y se puede reactivar con
+# ENABLE_DOCS=1 (útil en local/staging).
+_DOCS_ENABLED = os.getenv("ENABLE_DOCS", "").lower() in ("1", "true", "yes")
+
+app = FastAPI(
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
+)
 
 # CORS configurable por entorno. En producción (Cloudflare/Dokploy) define
 # ALLOWED_ORIGINS con los orígenes del frontend separados por coma, p.ej.:
@@ -881,7 +890,11 @@ async def generate_weekly_pdf(
         raise he
     except Exception as e:
         log_error(logger, "PDF generation", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        # No exponer str(e) al cliente: los errores de PostgREST arrastran nombres
+        # de tablas, columnas y restricciones (mapa del esquema para un atacante).
+        # El detalle real queda en los logs del servidor.
+        logger.exception("error interno")
+        raise HTTPException(status_code=500, detail="Error interno")
 
 @app.get("/check_weeks", response_class=JSONResponse)
 async def check_weeks(year: int):
@@ -931,7 +944,11 @@ async def check_weeks(year: int):
         raise he
     except Exception as e:
         log_error(logger, "week validation", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        # No exponer str(e) al cliente: los errores de PostgREST arrastran nombres
+        # de tablas, columnas y restricciones (mapa del esquema para un atacante).
+        # El detalle real queda en los logs del servidor.
+        logger.exception("error interno")
+        raise HTTPException(status_code=500, detail="Error interno")
 
 @app.post("/new_place", response_class=JSONResponse)
 async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
@@ -1303,7 +1320,11 @@ def get_water_health(place_id: int, days: int = 30):
         }
     except Exception as e:
         log_error(logger, f"water-health place {place_id}", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        # No exponer str(e) al cliente: los errores de PostgREST arrastran nombres
+        # de tablas, columnas y restricciones (mapa del esquema para un atacante).
+        # El detalle real queda en los logs del servidor.
+        logger.exception("error interno")
+        raise HTTPException(status_code=500, detail="Error interno")
 
 
 @app.get("/api/places/{place_id}/calibration-events")
@@ -1363,7 +1384,11 @@ def get_calibration_events(place_id: int, n: int = 4):
         return {"clusters": out}
     except Exception as e:
         log_error(logger, f"calibration-events place {place_id}", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        # No exponer str(e) al cliente: los errores de PostgREST arrastran nombres
+        # de tablas, columnas y restricciones (mapa del esquema para un atacante).
+        # El detalle real queda en los logs del servidor.
+        logger.exception("error interno")
+        raise HTTPException(status_code=500, detail="Error interno")
 
 
 class ConfirmEventRequest(BaseModel):
@@ -1384,7 +1409,11 @@ def confirm_event(place_id: int, req: ConfirmEventRequest):
         return {"success": True, "confirmation": rec}
     except Exception as e:
         log_error(logger, f"confirm place {place_id}", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        # No exponer str(e) al cliente: los errores de PostgREST arrastran nombres
+        # de tablas, columnas y restricciones (mapa del esquema para un atacante).
+        # El detalle real queda en los logs del servidor.
+        logger.exception("error interno")
+        raise HTTPException(status_code=500, detail="Error interno")
 
 
 @app.get("/api/places/{place_id}/disaggregation-profiles")

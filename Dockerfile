@@ -34,12 +34,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create necessary directories with proper permissions
-RUN mkdir -p /app/static/images && \
-    mkdir -p /app/matplotlib_cache && \
-    chmod -R 777 /app/static && \
-    chmod -R 777 /app/matplotlib_cache && \
-    chown -R root:root /app
+# Usuario NO-root: uvicorn corría como root, así que cualquier RCE daba root
+# dentro del contenedor. El 777 sobre /app/static era innecesario (es el
+# directorio servido públicamente): basta con que lo posea el usuario de la app.
+# Los PNG/PDF generados van a GEN_DIR bajo /tmp, escribible por cualquiera.
+RUN mkdir -p /app/static/images /app/matplotlib_cache && \
+    useradd --create-home --shell /usr/sbin/nologin app && \
+    chown -R app:app /app && \
+    chmod -R 755 /app/static && \
+    chmod -R 775 /app/matplotlib_cache
 
 # Set environment variables
 ENV MPLCONFIGDIR=/app/matplotlib_cache
@@ -49,6 +52,8 @@ ENV PYTHONUNBUFFERED=1
 
 # Expose the port that the application listens on
 EXPOSE 8000
+
+USER app
 
 # Healthcheck contra /ping (sin curl: usa python, siempre presente). Permite que
 # el orquestador detecte un contenedor vivo-pero-no-sirviendo.
