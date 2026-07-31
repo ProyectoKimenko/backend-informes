@@ -125,8 +125,20 @@ def label_by_signature(
 VOLUME_RANGE_BY_LABEL = {
     "Inodoro (cisterna)": (2.0, 15.0),
     "Inodoro / descarga": (0.3, 20.0),
-    "Ducha": (5.0, 300.0),
+    # Techo bajado de 300 L a 150 L: a ~7 L/min (caudal real medido en el
+    # Refugio) 150 L son >20 min de ducha continua, ya generoso. Con 300 L se
+    # colaban como "Ducha" llenados de estanque y fugas largas — se observaron
+    # eventos de 895 L/92 min y 527 L/7 h etiquetados como ducha.
+    "Ducha": (5.0, 150.0),
     "Grifo / lavamanos": (0.01, 15.0),
     "Grifo (uso prolongado)": (1.0, 40.0),
     "Goteo / fuga": (0.0, 60.0),
+    # Artefactos declarados en el inventario del recinto (label_by_fixtures).
+    "Urinario": (0.3, 6.0),
+    "Tina": (40.0, 300.0),
+    "Lavaplatos / cocina": (2.0, 60.0),
+    # Llenado de acumulador/estanque: caudal sostenido y volumen muy grande.
+    # Es un uso REAL del recinto (suministro intermitente por congelamiento),
+    # no un artefacto sanitario: separarlo evita inflar la ducha.
+    "Llenado de estanque": (150.0, 2000.0),
 }
