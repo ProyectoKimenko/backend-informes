@@ -66,7 +66,12 @@ class Report:
             logo_path=self.logo_path
         )
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+        # El PDF va a GEN_DIR (mismo directorio acotado que los PNG) para que el
+        # barredor periódico lo recoja si la petición falla y nadie lo borra.
+        # Antes caía en la raíz de /tmp, fuera del alcance del sweep -> huérfano.
+        gen_dir = os.path.join(tempfile.gettempdir(), "kimenko_generated")
+        os.makedirs(gen_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf', dir=gen_dir) as temp_file:
             pdf_file = temp_file.name
             # Remove unsupported options for WeasyPrint
             HTML(string=rendered_html).write_pdf(

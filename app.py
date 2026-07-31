@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.requests import Request
@@ -89,8 +89,27 @@ def _job_set(task_id: str, **fields):
                 JOBS.pop(k, None)
 
 
+# Semáforo de jobs pesados. Cada job hace fetch_measurements (paginado de
+# millones de filas a memoria) + pipeline NILM. Sin cota, N peticiones
+# concurrentes = N cargas simultáneas -> OOM y muerte del contenedor. _JOBS_MAX
+# solo acotaba el dict de ESTADO, no los jobs en vuelo.
+_JOB_SLOTS = threading.Semaphore(int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
+
+
 def _run_job(task_id: str, fn, *args, **kwargs):
     """Corre fn(...) en background (threadpool de BackgroundTasks) trackeando estado."""
+    # Espera un hueco antes de tocar memoria; los jobs encolados quedan visibles
+    # como 'queued' en /api/disaggregate/status en vez de competir por la RAM.
+    if not _JOB_SLOTS.acquire(blocking=False):
+        _job_set(task_id, status="queued", progress=0)
+        _JOB_SLOTS.acquire()
+    try:
+        _run_job_locked(task_id, fn, *args, **kwargs)
+    finally:
+        _JOB_SLOTS.release()
+
+
+def _run_job_locked(task_id: str, fn, *args, **kwargs):
     _job_set(task_id, status="processing", progress=5)
 
     def cb(meta: dict):
@@ -566,7 +585,7 @@ def ping():
 
 
 @app.get("/health/data-freshness")
-async def data_freshness(max_age_s: int = 300):
+def data_freshness(max_age_s: int = 300):
     """Frescura de la ingesta: compara max(timestamp) de measurements_realtime vs
     ahora. Devuelve 200 si algún place ingirió datos hace < max_age_s, 503 si TODOS
     están stale (scraper caído/zombi). Pensado para un monitor externo (Uptime Kuma /
@@ -614,7 +633,7 @@ async def data_freshness(max_age_s: int = 300):
         return JSONResponse({"status": "error", "detail": "check failed"}, status_code=503)
 
 @app.get("/places", response_class=JSONResponse)
-async def get_places():
+def get_places():
     """Devuelve la lista de lugares desde la tabla 'places'."""
     try:
         response = supabase.table("places").select("*").execute()
@@ -625,7 +644,7 @@ async def get_places():
         raise HTTPException(status_code=500, detail="Error fetching places")
 
 @app.get("/analysis", response_class=JSONResponse)
-async def analysis_json(
+def analysis_json(
     window_size: int = 60,
     start_week: int = 1,
     end_week: int = 1,
@@ -704,7 +723,7 @@ async def analysis_json(
         }
 
 @app.get("/generate_weekly_pdf", status_code=200)
-async def generate_weekly_pdf(
+def generate_weekly_pdf(
     year: int,
     end_week: int,
     start_week: int,
@@ -713,6 +732,10 @@ async def generate_weekly_pdf(
 ):
     time_start = time.time()
     _sweep_generated()  # limpia PNGs/PDF temporales viejos (evita fuga de disco)
+    # Los PNG de esta petición se borran en el finally. Antes solo los barría la
+    # request SIGUIENTE y únicamente si tenían >1h: peticiones sostenidas podían
+    # llenar el disco dentro de esa ventana.
+    _pngs_before = set(os.listdir(GEN_DIR)) if os.path.isdir(GEN_DIR) else set()
     try:
         response = supabase.table("places").select("*").execute()
         places = response.data if response.data else []
@@ -878,7 +901,7 @@ async def generate_weekly_pdf(
         logger.info("Report generated successfully")
 
         time_end = time.time()
-        print(f"Time taken: {time_end - time_start} seconds")
+        logger.info("PDF generado en %.2fs", time_end - time_start)
         return FileResponse(
             pdf_file,
             media_type='application/pdf',
@@ -895,9 +918,21 @@ async def generate_weekly_pdf(
         # El detalle real queda en los logs del servidor.
         logger.exception("error interno")
         raise HTTPException(status_code=500, detail="Error interno")
+    finally:
+        # Los PNG ya están incrustados en el PDF (WeasyPrint los leyó en render),
+        # así que es seguro borrarlos al salir, tanto en éxito como en error.
+        try:
+            for _fn in set(os.listdir(GEN_DIR)) - _pngs_before:
+                if _fn.endswith(".png"):
+                    try:
+                        os.remove(os.path.join(GEN_DIR, _fn))
+                    except OSError:
+                        pass
+        except OSError:
+            pass
 
 @app.get("/check_weeks", response_class=JSONResponse)
-async def check_weeks(year: int):
+def check_weeks(year: int):
     """Check which weeks have data in the specified year"""
     try:
         supabase_url = os.environ.get("SUPABASE_URL")
@@ -922,20 +957,25 @@ async def check_weeks(year: int):
             start_epoch = int(week_start.timestamp() * 1000)
             end_epoch = int(week_end.timestamp() * 1000)
             
+            # Solo se necesita CUÁNTAS filas hay, no las filas. Antes traía todas
+            # (select "*") 52 veces —millones de filas a memoria por request, el
+            # peor consumidor de RAM de la API—. count='exact' lo resuelve en la
+            # base y devuelve un único número.
             response = supabase.table("measurements") \
-                .select("*") \
+                .select("id", count="exact") \
                 .gte("timestamp", start_epoch) \
                 .lte("timestamp", end_epoch) \
+                .limit(1) \
                 .execute()
-            
-            data_records = response.data if response.data else []
-            has_data = len(data_records) > 100
+
+            record_count = response.count or 0
+            has_data = record_count > 100
             
             weeks_data[week] = {
                 'has_data': has_data,
                 'start_date': week_start.strftime('%Y-%m-%d'),
                 'end_date': week_end.strftime('%Y-%m-%d'),
-                'records': len(data_records)
+                'records': record_count
             }
         
         return {"year": year, "weeks": weeks_data}
@@ -951,7 +991,7 @@ async def check_weeks(year: int):
         raise HTTPException(status_code=500, detail="Error interno")
 
 @app.post("/new_place", response_class=JSONResponse)
-async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
+def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
     """Create a new place"""
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_KEY")
@@ -965,7 +1005,7 @@ async def new_place(name: str = Body(...), flow_reporter_id: int = Body(...)):
     return {"success": True, "place": new_place}
 
 @app.post("/scrape_place", response_class=JSONResponse)
-async def scrape_place(
+def scrape_place(
     background_tasks: BackgroundTasks,
     place_id: int = Body(...),
     start_date: str = Body(...),
@@ -996,7 +1036,7 @@ def trigger(place_id: int, background_tasks: BackgroundTasks):
     background_tasks.add_task(_run_job, task_id, infer_and_refresh, place_id)
     return {"task_id": task_id, "status": "queued"}
 @app.post("/api/disaggregate/trigger")
-async def trigger_disaggregation(request: DisaggregationRequest, background_tasks: BackgroundTasks):
+def trigger_disaggregation(request: DisaggregationRequest, background_tasks: BackgroundTasks):
     if not request.start_time or not request.end_time:
         end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(hours=1)
@@ -1018,7 +1058,7 @@ async def trigger_disaggregation(request: DisaggregationRequest, background_task
 
 
 @app.get("/api/disaggregate/status/{task_id}")
-async def get_task_status(task_id: str):
+def get_task_status(task_id: str):
     # Estado del job desde el dict en memoria (reemplaza el result backend de Celery).
     job = JOBS.get(task_id)
     if not job:
@@ -1027,7 +1067,7 @@ async def get_task_status(task_id: str):
 
 
 @app.post("/api/disaggregate/last-hour/{place_id}")
-async def trigger_last_hour(place_id: int, background_tasks: BackgroundTasks):
+def trigger_last_hour(place_id: int, background_tasks: BackgroundTasks):
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(hours=1)
 
@@ -1089,7 +1129,7 @@ def scraper_status(scraper_id: str):
     }
 
 @app.get("/monitors", response_class=JSONResponse)
-async def get_monitors():
+def get_monitors():
     """Lugares + estado REAL de su scraper, derivado de la INGESTA
     (max(timestamp) de measurements_realtime vs ahora). Antes leía claves Redis
     (scraper:*:liveness) que el scraper NUNCA escribe -> reportaba DOWN aunque
@@ -1164,7 +1204,7 @@ async def get_monitors():
         return JSONResponse({"monitors": []}, status_code=200)
 
 @app.get("/analysis/stackplot", response_class=JSONResponse)
-async def get_stackplot(place_id: int, start_date: str, end_date: str, granularity: str = "day"):
+def get_stackplot(place_id: int, start_date: str, end_date: str, granularity: str = "day"):
     try:
         if len(start_date) == 10: start_date += "T00:00:00"
         if len(end_date) == 10: end_date += "T23:59:59"
@@ -1226,8 +1266,10 @@ def get_available_dates(place_id: int, year: int, month: int):
         "p_month": month,
     }).execute()
 
-    print("place_id:", place_id, "year:", year, "month:", month)
-    print("rpc data:", res.data)
+    # Antes se volcaba res.data entero a stdout en cada llamada: ruido en los
+    # logs de Dokploy y datos del recinto en claro. Se deja solo el contexto.
+    logger.debug("available_dates place=%s year=%s month=%s filas=%s",
+                 place_id, year, month, len(res.data or []))
 
     return {
         "available_days": [r["day"] for r in (res.data or [])]
@@ -1254,7 +1296,7 @@ def get_data_range(place_id: int):
 
 
 @app.get("/api/places/{place_id}/water-health")
-def get_water_health(place_id: int, days: int = 30):
+def get_water_health(place_id: int, days: int = Query(30, ge=1, le=365)):
     """Salud hídrica / detección de fuga por CAUDAL BASE NOCTURNO (02:00-04:59).
 
     Cuando nadie usa agua el caudal debería caer a ~0. Un PISO sostenido (p10 del
