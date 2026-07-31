@@ -436,6 +436,34 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
     return _build_events(df_result, out_cols + [COMPOSITE]), df_result
 
 
+LEAK_FLOW_LMIN = 2.5      # caudal por debajo del cual un uso sostenido es goteo
+LEAK_MIN_DUR_S = 1800.0   # 30 min sostenidos
+TANK_FILL_MIN_L = 150.0   # volumen desde el que se considera llenado de acumulador
+
+
+def _reclassify_oversized(label: str, mean_flow: float, duration_s: float,
+                          volume_l: float) -> str:
+    """Reetiqueta un evento cuyo volumen es imposible para su artefacto.
+
+    _build_events fusiona tramos contiguos, así que varias duchas seguidas (el
+    Refugio tiene 7) se concatenan en un único "evento". Eso producía duchas de
+    895 L / 92 min y de 527 L / 7 h — físicamente imposibles para UN artefacto.
+    Se decide por firma en vez de mantener una etiqueta falsa:
+      - caudal bajo y sostenido horas -> goteo / fuga (accionable: ahorro real)
+      - volumen enorme               -> llenado de acumulador (el suministro del
+        recinto es intermitente y se llenan estanques de madrugada)
+      - resto                        -> uso simultáneo de varios artefactos
+    """
+    _, vmax = VOLUME_RANGE_BY_LABEL.get(label, (0.0, float("inf")))
+    if volume_l <= vmax:
+        return label
+    if mean_flow <= LEAK_FLOW_LMIN and duration_s >= LEAK_MIN_DUR_S:
+        return "Goteo / fuga"
+    if volume_l >= TANK_FILL_MIN_L:
+        return "Llenado de estanque"
+    return COMPOSITE
+
+
 def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFrame:
     rows = []
     for col in device_names:
@@ -454,8 +482,16 @@ def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFr
             vol = integrate_volume(seg)   # litros con Δt real (antes seg.sum()/60)
             if not is_valid_event(avg, duration, vol):
                 continue
+            device = _reclassify_oversized(col, avg, duration, vol)
+            if device != col:
+                # Mover también los litros en la matriz de readings, para que los
+                # buckets del gráfico y la tabla de eventos no se contradigan.
+                if device not in df_result.columns:
+                    df_result[device] = 0.0
+                df_result.loc[s:e, device] += seg.values
+                df_result.loc[s:e, col] = 0.0
             rows.append({
-                "device": col,
+                "device": device,
                 "start_time": s,
                 "end_time": e,
                 "duration_seconds": float(duration),
