@@ -498,4 +498,15 @@ def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFr
                 "flow_rate": avg,
                 "volume_liters": vol,
             })
-    return pd.DataFrame(rows)
+    df_ev = pd.DataFrame(rows)
+    if df_ev.empty:
+        return df_ev
+    # La reclasificación puede mandar tramos de DOS artefactos distintos a la
+    # misma etiqueta en el mismo instante, y disaggregation_events es único por
+    # (place_id, device_name, start_time, end_time): sin agregar, el upsert
+    # revienta con "ON CONFLICT DO UPDATE cannot affect row a second time".
+    # Se suman porque son caudales concurrentes del mismo tramo temporal.
+    return (df_ev.groupby(["device", "start_time", "end_time"], as_index=False)
+                 .agg(duration_seconds=("duration_seconds", "max"),
+                      flow_rate=("flow_rate", "sum"),
+                      volume_liters=("volume_liters", "sum")))
