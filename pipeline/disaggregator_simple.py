@@ -18,7 +18,7 @@ N centroides (caudal, duración) + tolerancia, que caben en disaggregation_profi
 
 Interfaz compatible con worker/tasks.py:
   train_disaggregator(df) -> dict[int, profile]
-  run_disaggregation(df, profiles) -> (df_events, df_result)
+  run_disaggregation(df, profiles, fixtures) -> (df_events, df_result)
 """
 from typing import Dict, List, Tuple
 import numpy as np
@@ -344,7 +344,7 @@ def apply_confirmations(profiles: Dict, confirmations: List[Dict]) -> Dict:
 # Cada evento segmentado se asigna al perfil 2D más cercano dentro de tolerancia;
 # su caudal se reparte timestep a timestep (min(caudal, centroide)) con residual.
 # -----------------------------------------------------------------------------
-def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     if not profiles:
         raise ValueError("No trained profiles provided.")
 
@@ -433,7 +433,7 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict) -> Tuple[pd.DataFrame, 
           f"(concurrentes→Uso simultáneo={n_comp}, rechazados→No Detectado={n_rej})")
     # COMPOSITE entra como device para que sus eventos se emitan; si no hubo
     # concurrencia la columna es 0 y _build_events no genera nada para ella.
-    return _build_events(df_result, out_cols + [COMPOSITE]), df_result
+    return _build_events(df_result, out_cols + [COMPOSITE], fixtures), df_result
 
 
 LEAK_FLOW_LMIN = 2.5      # caudal por debajo del cual un uso sostenido es goteo
@@ -442,7 +442,7 @@ TANK_FILL_MIN_L = 150.0   # volumen desde el que se considera llenado de acumula
 
 
 def _reclassify_oversized(label: str, mean_flow: float, duration_s: float,
-                          volume_l: float) -> str:
+                          volume_l: float, fixtures: list = None) -> str:
     """Reetiqueta un evento cuyo volumen es imposible para su artefacto.
 
     _build_events fusiona tramos contiguos, así que varias duchas seguidas (el
@@ -459,12 +459,23 @@ def _reclassify_oversized(label: str, mean_flow: float, duration_s: float,
         return label
     if mean_flow <= LEAK_FLOW_LMIN and duration_s >= LEAK_MIN_DUR_S:
         return "Goteo / fuga"
+    # ANTES de asumir llenado de estanque, ver si el evento encaja con OTRO
+    # artefacto declarado del recinto. Sin esto, la tina (declarada 8 L/min y
+    # 150 L) caía siempre en "Llenado de estanque" porque su volumen coincide
+    # justo con el umbral: se observaron llenados de 152-190 L a ~8 L/min en
+    # ~20 min, que son exactamente la firma de la tina.
+    if fixtures:
+        alt = label_by_fixtures(mean_flow, duration_s, volume_l, 0.0, fixtures)
+        if alt and alt != label:
+            amin, amax = VOLUME_RANGE_BY_LABEL.get(alt, (0.0, float("inf")))
+            if amin <= volume_l <= amax:
+                return alt
     if volume_l >= TANK_FILL_MIN_L:
         return "Llenado de estanque"
     return COMPOSITE
 
 
-def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFrame:
+def _build_events(df_result: pd.DataFrame, device_names: List[str], fixtures: list = None) -> pd.DataFrame:
     rows = []
     for col in device_names:
         is_active = df_result[col] > 0
@@ -482,7 +493,7 @@ def _build_events(df_result: pd.DataFrame, device_names: List[str]) -> pd.DataFr
             vol = integrate_volume(seg)   # litros con Δt real (antes seg.sum()/60)
             if not is_valid_event(avg, duration, vol):
                 continue
-            device = _reclassify_oversized(col, avg, duration, vol)
+            device = _reclassify_oversized(col, avg, duration, vol, fixtures)
             if device != col:
                 # Mover también los litros en la matriz de readings, para que los
                 # buckets del gráfico y la tabla de eventos no se contradigan.

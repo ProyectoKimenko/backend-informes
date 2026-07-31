@@ -106,7 +106,11 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
         if df.empty:
             return {"place_id": place_id, "status": "no_data"}
 
-        df_events, df_result = run_disaggregation(df, profiles)
+        # El inventario declarado permite reclasificar eventos sobredimensionados
+        # contra los artefactos REALES del recinto (p.ej. la tina) en vez de
+        # asumir llenado de estanque.
+        from services.supabase_service import get_place_fixtures as _gpf
+        df_events, df_result = run_disaggregation(df, profiles, _gpf(place_id))
 
         # Litros con integral por Δt real (antes sum()/60 asumía cadencia fija).
         flow_col = "flow_rate" if "flow_rate" in df.columns else "flow"
