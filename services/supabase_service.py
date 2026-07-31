@@ -406,26 +406,61 @@ def save_disaggregation_result(
         raise
 
 
+DEFAULT_PLACE_TZ = "America/Santiago"
+
+
 def get_place_fixtures(place_id: int) -> List[Dict[str, Any]]:
     """Inventario de artefactos declarado del recinto (place_config.fixtures).
     Devuelve [] si no hay config — el entrenamiento cae a la heurística física."""
+    return get_place_settings(place_id)["fixtures"]
+
+
+def get_place_settings(place_id: int) -> Dict[str, Any]:
+    """Config completa del recinto: inventario de artefactos (con aforos y horarios),
+    zona horaria local y datos de ocupación del catastro. Defaults seguros si no hay
+    config o la consulta falla (fixtures=[], tz America/Santiago, occupancy={})."""
     sb = get_supabase()
+    out: Dict[str, Any] = {"fixtures": [], "timezone": DEFAULT_PLACE_TZ, "occupancy": {}}
     try:
-        res = sb.table("place_config").select("fixtures").eq("place_id", place_id).limit(1).execute()
-        if res.data and isinstance(res.data[0].get("fixtures"), list):
-            return res.data[0]["fixtures"]
+        res = (
+            sb.table("place_config")
+            .select("fixtures, timezone, occupancy")
+            .eq("place_id", place_id)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            row = res.data[0]
+            if isinstance(row.get("fixtures"), list):
+                out["fixtures"] = row["fixtures"]
+            if row.get("timezone"):
+                out["timezone"] = row["timezone"]
+            if isinstance(row.get("occupancy"), dict):
+                out["occupancy"] = row["occupancy"]
     except Exception as e:
-        print(f"[Config] get_place_fixtures place_id={place_id} falló: {e}")
-    return []
+        print(f"[Config] get_place_settings place_id={place_id} falló: {e}")
+    return out
 
 
-def save_place_fixtures(place_id: int, fixtures: List[Dict[str, Any]]) -> None:
-    """Guarda (upsert) el inventario de artefactos del recinto."""
+def save_place_config(
+    place_id: int,
+    fixtures: List[Dict[str, Any]],
+    timezone_name: str | None = None,
+    occupancy: Dict[str, Any] | None = None,
+) -> None:
+    """Guarda (upsert) la config del recinto: inventario + tz + ocupación del catastro.
+    timezone/occupancy solo se escriben si vienen (no pisa lo guardado con None)."""
     sb = get_supabase()
-    sb.table("place_config").upsert(
-        {"place_id": place_id, "fixtures": fixtures, "updated_at": datetime.now(timezone.utc).isoformat()},
-        on_conflict="place_id",
-    ).execute()
+    payload: Dict[str, Any] = {
+        "place_id": place_id,
+        "fixtures": fixtures,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if timezone_name:
+        payload["timezone"] = timezone_name
+    if occupancy is not None:
+        payload["occupancy"] = occupancy
+    sb.table("place_config").upsert(payload, on_conflict="place_id").execute()
 
 
 def get_all_places() -> List[Dict[str, Any]]:

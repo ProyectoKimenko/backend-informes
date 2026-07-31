@@ -79,6 +79,40 @@ def _count_available_days(place_id: int, start_time: str, end_time: str) -> int:
     return total
 
 
+def _coherence_audit(df_events, fixtures: list, days: float) -> list:
+    """Compara el catastro declarado con lo observado, por etiqueta de artefacto:
+    usos/día esperados (aforo del recinto: 15 huéspedes, 8 trabajadores x3 usos,
+    135 comensales...) vs eventos/día detectados, y litros/día esperados
+    (uses_per_day x volume_l) vs litros/día atribuidos. Solo artefactos que
+    declaran uses_per_day. Es diagnóstico (no altera la atribución): un ratio muy
+    desviado delata un perfil mal etiquetado o un cambio real de ocupación."""
+    if not fixtures or df_events is None or len(df_events) == 0 or days <= 0:
+        return []
+    per = df_events.groupby("device").agg(
+        n=("device", "size"), liters=("volume_liters", "sum")
+    )
+    out = []
+    for fx in fixtures:
+        try:
+            upd = float(fx.get("uses_per_day") or 0.0)
+            vol = float(fx.get("volume_l") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if upd <= 0:
+            continue
+        lab = fx.get("label")
+        n = int(per.loc[lab, "n"]) if lab in per.index else 0
+        liters = float(per.loc[lab, "liters"]) if lab in per.index else 0.0
+        out.append({
+            "label": lab,
+            "expected_uses_day": upd,
+            "observed_events_day": round(n / days, 1),
+            "expected_liters_day": round(upd * vol, 1) if vol > 0 else None,
+            "observed_liters_day": round(liters / days, 1),
+        })
+    return out
+
+
 def process_disaggregation(place_id: int, start_time: str | None = None, end_time: str | None = None, progress_cb=None):
     try:
         if not start_time or not end_time:
@@ -106,11 +140,15 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
         if df.empty:
             return {"place_id": place_id, "status": "no_data"}
 
-        # El inventario declarado permite reclasificar eventos sobredimensionados
-        # contra los artefactos REALES del recinto (p.ej. la tina) en vez de
-        # asumir llenado de estanque.
-        from services.supabase_service import get_place_fixtures as _gpf
-        df_events, df_result = run_disaggregation(df, profiles, _gpf(place_id))
+        # La config declarada del recinto (catastro) dirige la inferencia: el
+        # inventario reclasifica eventos sobredimensionados contra los artefactos
+        # REALES (p.ej. la tina), los horarios de operación vetan atribuciones
+        # imposibles (cocina de madrugada) y la tz convierte UTC a hora local.
+        from services.supabase_service import get_place_settings
+        settings = get_place_settings(place_id)
+        df_events, df_result = run_disaggregation(
+            df, profiles, settings["fixtures"], settings["timezone"]
+        )
 
         # Litros con integral por Δt real (antes sum()/60 asumía cadencia fija).
         flow_col = "flow_rate" if "flow_rate" in df.columns else "flow"
@@ -151,6 +189,22 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
             df_result,
         )
 
+        # Coherencia catastro vs observado: usos/día declarados (aforo: huéspedes,
+        # trabajadores, comensales) contra eventos/día y litros/día atribuidos.
+        # Denominador = días CON DATOS, no el largo del rango pedido: el scraper se
+        # cae y fetch devuelve solo los días existentes — dividir por el rango
+        # subestimaría eventos/día (falso "uso bajo el catastro"). min(span, días
+        # distintos): el span corrige ventanas de <2 días (cron diario) y los días
+        # distintos corrigen rangos largos con huecos. Se calcula desde _raw (las
+        # mediciones ya en memoria), sin re-parsear start/end_time.
+        if len(_raw):
+            _span_d = (_raw.index.max() - _raw.index.min()).total_seconds() / 86400.0
+            _distinct_d = float(pd.DatetimeIndex(_raw.index).floor("D").nunique())
+            data_days = max(min(_span_d, _distinct_d), 1.0 / 24.0)
+        else:
+            data_days = 1.0 / 24.0
+        coherence = _coherence_audit(df_events, settings["fixtures"], data_days)
+
         return {
             "place_id": place_id,
             "status": "inference_done",
@@ -162,6 +216,7 @@ def process_disaggregation(place_id: int, start_time: str | None = None, end_tim
                 "no_detectado_liters": float(nd_liters),
                 "smoothing_loss_pct": round(smoothing_loss_pct, 3),
                 "discrepancy_pct": discrepancy_pct,
+                "coherence": coherence,
             },
         }
 
@@ -239,14 +294,16 @@ def train_model(place_id: int, start_time: str, end_time: str):
             return {"status": "no_data"}
 
         from pipeline.disaggregator_simple import train_disaggregator, apply_confirmations
-        from services.supabase_service import get_confirmations, get_place_fixtures
+        from services.supabase_service import get_confirmations, get_place_settings
 
-        # Inventario declarado del recinto: si existe, etiqueta los clusters por el
-        # artefacto REAL más cercano en vez de la heurística física genérica.
-        fixtures = get_place_fixtures(place_id)
+        # Config declarada del recinto (catastro): el inventario etiqueta los clusters
+        # por el artefacto REAL más cercano; los aforos (uses_per_day) y horarios
+        # (hours) vetan candidatos imposibles; la tz da la hora local de los eventos.
+        settings = get_place_settings(place_id)
+        fixtures = settings["fixtures"]
         if fixtures:
             print(f"[TrainSimple] usando inventario del recinto ({len(fixtures)} artefactos declarados)")
-        profiles = train_disaggregator(df, fixtures=fixtures)
+        profiles = train_disaggregator(df, fixtures=fixtures, tz_name=settings["timezone"])
 
         if not profiles:
             return {"status": "no_patterns_found"}

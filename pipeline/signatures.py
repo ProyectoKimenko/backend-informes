@@ -22,16 +22,83 @@ import math
 
 UNCLASSIFIED = "Sin clasificar"
 
+# Margen del veto de frecuencia: un cluster puede tener hasta FREQ_VETO_FACTOR veces
+# más eventos/día que los usos/día declarados del artefacto antes de descartarse como
+# candidato. Generoso a propósito (cubre días peak, splits de eventos y error de la
+# declaración del operador); solo mata desajustes GROSEROS — p.ej. un cluster con 40
+# eventos/día jamás es la tina declarada con 1 uso/día.
+FREQ_VETO_FACTOR = 8.0
 
-def label_by_fixtures(median_flow, median_duration, median_volume, cv_volume, fixtures):
+# Fracción mínima de eventos del cluster dentro de la ventana horaria declarada del
+# artefacto para que este sea candidato. 0.5: la mitad de los eventos fuera del
+# horario de la cocina => ese cluster no es el lavaplatos.
+HOURS_MIN_FRACTION = 0.5
+
+
+def _valid_windows(windows):
+    """Filtra ventanas horarias bien formadas: pares (a, b) con a, b en [0, 24] y
+    a != b. a > b significa cruce de medianoche ([22, 2] = 22:00-02:00). Lo
+    malformado se ignora; si NADA es válido se trata como SIN restricción (fail-open:
+    un dato corrupto en el catastro no debe vetar un artefacto las 24 horas)."""
+    out = []
+    for w in (windows or []):
+        try:
+            a, b = float(w[0]), float(w[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        # NaN falla toda comparación => queda excluido aquí mismo.
+        if not (0 <= a <= 24 and 0 <= b <= 24) or a == b:
+            continue
+        out.append((a, b))
+    return out
+
+
+def hour_in_windows(hour: float, windows) -> bool:
+    """¿Cae la hora local (0-24, fraccional) dentro de alguna ventana [ini, fin]?
+
+    [ini, fin) con ini < fin; ini > fin cruza medianoche ([22, 2] = 22:00-02:00).
+    Sin ventanas declaradas (o ninguna válida) => sin restricción horaria.
+    """
+    vw = _valid_windows(windows)
+    if not vw:
+        return True
+    for a, b in vw:
+        if a < b:
+            if a <= hour < b:
+                return True
+        elif hour >= a or hour < b:
+            return True
+    return False
+
+
+def _hours_fraction(local_hours, windows) -> float:
+    """Fracción de horas (array de horas locales de eventos) dentro de las ventanas."""
+    if not _valid_windows(windows) or local_hours is None or len(local_hours) == 0:
+        return 1.0
+    inside = sum(1 for h in local_hours if hour_in_windows(float(h), windows))
+    return inside / len(local_hours)
+
+
+def label_by_fixtures(median_flow, median_duration, median_volume, cv_volume, fixtures,
+                      events_per_day=None, local_hours=None):
     """Etiqueta un cluster por el ARTEFACTO DECLARADO más cercano del inventario del
     recinto, en vez de las bandas heurísticas de label_by_signature.
 
-    fixtures: lista de dicts {label, flow_lmin, volume_l, count?} declarados por el
-    operador. Match por caudal + volumen (log) normalizados por error RELATIVO — así
-    "Ducha 9 L/min ~40 L" ancla los clusters de ese caudal/volumen a la firma REAL del
-    recinto. Si nada cae dentro de tolerancia → UNCLASSIFIED (honesto). Devuelve None si
-    no hay inventario, para que el caller use label_by_signature (fallback).
+    fixtures: lista de dicts {label, flow_lmin, volume_l, count?, uses_per_day?, hours?}
+    declarados por el operador. Match por caudal + volumen (log) normalizados por error
+    RELATIVO — así "Ducha 9 L/min ~40 L" ancla los clusters de ese caudal/volumen a la
+    firma REAL del recinto. Si nada cae dentro de tolerancia → UNCLASSIFIED (honesto).
+    Devuelve None si no hay inventario, para que el caller use label_by_signature.
+
+    Información adicional del catastro (opcional, ignorada si no se declara):
+      - events_per_day: eventos/día del cluster. Veto de FRECUENCIA contra el
+        `uses_per_day` declarado (usos/día esperados del TOTAL de unidades `count`):
+        un cluster con muchos más eventos/día que los usos plausibles del artefacto
+        no puede ser ese artefacto (p.ej. la tina, 1 uso/día).
+      - local_hours: horas locales (0-24) de los eventos del cluster. Veto de HORARIO
+        contra `hours` (ventanas [[ini, fin], ...] en hora local del recinto): si la
+        mayoría de los eventos cae fuera del horario de operación del artefacto
+        (p.ej. cocina 09-23), ese artefacto se descarta como candidato.
     """
     if not fixtures:
         return None
@@ -45,6 +112,17 @@ def label_by_fixtures(median_flow, median_duration, median_volume, cv_volume, fi
             continue
         if fx_flow <= 0:
             continue
+        # Veto de FRECUENCIA: el cluster tiene demasiados eventos/día para este artefacto.
+        try:
+            fx_upd = float(fx.get("uses_per_day") or 0.0)
+        except (TypeError, ValueError):
+            fx_upd = 0.0
+        if events_per_day is not None and fx_upd > 0 and events_per_day > FREQ_VETO_FACTOR * fx_upd:
+            continue
+        # Veto de HORARIO: la mayoría de los eventos del cluster cae fuera de la
+        # ventana de operación declarada del artefacto.
+        if _hours_fraction(local_hours, fx.get("hours")) < HOURS_MIN_FRACTION:
+            continue
         # error relativo de caudal (primario) + de volumen en log (secundario, cola larga)
         df = (f - fx_flow) / max(fx_flow, 1.0)
         dv = (math.log1p(v) - math.log1p(fx_vol)) / max(math.log1p(fx_vol), 0.5) if fx_vol > 0 else 0.0
@@ -55,6 +133,30 @@ def label_by_fixtures(median_flow, median_duration, median_volume, cv_volume, fi
     if best_label and best_d is not None and best_d <= 0.6:
         return best_label
     return UNCLASSIFIED
+
+
+def hours_by_label(fixtures) -> dict:
+    """Mapa label -> ventanas horarias declaradas, con semántica de UNIÓN.
+
+    Varias unidades pueden compartir label: la restricción del label es la unión de
+    sus ventanas (una ducha disponible 6-10 y otra 18-23 => el label opera en ambas).
+    Si ALGUNA unidad del label no declara horario (o no tiene ventanas válidas), el
+    label queda SIN restricción — hay una unidad siempre disponible. Sin esto, el
+    último fixture pisaba a los demás y el resultado dependía del orden declarado.
+    """
+    out: dict = {}
+    unrestricted = set()
+    for fx in (fixtures or []):
+        lab = fx.get("label")
+        if not lab or lab in unrestricted:
+            continue
+        vw = _valid_windows(fx.get("hours"))
+        if vw:
+            out.setdefault(lab, []).extend([a, b] for a, b in vw)
+        else:
+            unrestricted.add(lab)
+            out.pop(lab, None)
+    return out
 
 # Evento que es SUPERPOSICIÓN de >=2 fixtures concurrentes (p.ej. ducha + grifo a la
 # vez). Con un solo sensor de caudal NO se puede separar de forma fiable, así que se

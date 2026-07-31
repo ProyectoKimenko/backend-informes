@@ -1502,33 +1502,67 @@ def update_disaggregation_profile_label(
 
 
 # ---------------------------------------------------------------------------
-# Config por recinto: inventario de artefactos (dirige el etiquetado de clusters).
+# Config por recinto (catastro): inventario de artefactos + aforos + horarios.
+# Dirige el etiquetado de clusters (train) y veta atribuciones imposibles (infer).
 # ---------------------------------------------------------------------------
 class PlaceFixture(BaseModel):
     label: str
     count: int = 1
     flow_lmin: float
     volume_l: float = 0.0
+    # usos/día esperados del TOTAL de unidades `count` (derivado del aforo del
+    # recinto: huéspedes, trabajadores, comensales). Veto de frecuencia en train.
+    uses_per_day: float | None = None
+    # ventanas horarias LOCALES de operación [[ini, fin], ...] (p.ej. cocina
+    # [[9, 23]]). Fuera de ellas el artefacto no recibe atribuciones. ini > fin
+    # cruza medianoche: [[22, 2]] = 22:00-02:00.
+    hours: list[list[float]] | None = None
 
 
 class PlaceConfigRequest(BaseModel):
     fixtures: list[PlaceFixture]
+    # IANA tz del recinto (los horarios son locales; la señal viene en UTC).
+    timezone: str | None = None
+    # Datos de ocupación del catastro (habitaciones, aforos, notas). Documentales:
+    # respaldan los uses_per_day declarados y quedan disponibles para reportes.
+    occupancy: dict | None = None
 
 
 @app.get("/api/places/{place_id}/config")
 def get_place_config(place_id: int):
-    from services.supabase_service import get_place_fixtures
-    return {"place_id": place_id, "fixtures": get_place_fixtures(place_id)}
+    from services.supabase_service import get_place_settings
+    return {"place_id": place_id, **get_place_settings(place_id)}
 
 
 @app.put("/api/places/{place_id}/config")
 def put_place_config(place_id: int, req: PlaceConfigRequest):
-    from services.supabase_service import save_place_fixtures
-    fixtures = [f.model_dump() for f in req.fixtures]
+    from services.supabase_service import save_place_config
+
+    if req.timezone:
+        from zoneinfo import ZoneInfo
+        try:
+            ZoneInfo(req.timezone)
+        except Exception:
+            raise HTTPException(status_code=422, detail=f"Zona horaria inválida: {req.timezone}")
+
+    fixtures = [f.model_dump(exclude_none=True) for f in req.fixtures]
     # Validación mínima: caudal > 0 (es lo que ancla el match).
     fixtures = [f for f in fixtures if float(f.get("flow_lmin") or 0) > 0 and (f.get("label") or "").strip()]
+    # Ventanas horarias: pares [ini, fin] en [0, 24] con ini != fin (ini > fin cruza
+    # medianoche). Una ventana malformada es 422 EXPLÍCITO, no descarte silencioso:
+    # botarla dejaría al operador creyendo que el gating horario quedó activo.
+    for f in fixtures:
+        for w in f.get("hours", []):
+            # NaN falla toda comparación => cae en el 422.
+            if not (len(w) == 2 and 0 <= w[0] <= 24 and 0 <= w[1] <= 24 and w[0] != w[1]):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(f"Ventana horaria inválida en '{f.get('label')}': {w} — "
+                            "se espera [inicio, fin] en horas 0-24 con inicio != fin "
+                            "(cruce de medianoche: [22, 2])"),
+                )
     try:
-        save_place_fixtures(place_id, fixtures)
+        save_place_config(place_id, fixtures, req.timezone, req.occupancy)
     except Exception as e:
         log_error(logger, "saving place config", e)
         raise HTTPException(status_code=500, detail="No se pudo guardar la config")

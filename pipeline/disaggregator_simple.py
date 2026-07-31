@@ -21,6 +21,7 @@ Interfaz compatible con worker/tasks.py:
   run_disaggregation(df, profiles, fixtures) -> (df_events, df_result)
 """
 from typing import Dict, List, Tuple
+from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 from sklearn.mixture import GaussianMixture
@@ -32,7 +33,31 @@ from pipeline.segmentation import (
     is_valid_event,
     integrate_volume,
 )
-from pipeline.signatures import label_by_signature, label_by_fixtures, VOLUME_RANGE_BY_LABEL, COMPOSITE
+from pipeline.signatures import (
+    label_by_signature,
+    label_by_fixtures,
+    hours_by_label,
+    hour_in_windows,
+    VOLUME_RANGE_BY_LABEL,
+    COMPOSITE,
+    UNCLASSIFIED,
+)
+
+# Zona horaria por defecto del recinto: los timestamps de la señal son UTC, pero los
+# horarios declarados del catastro (p.ej. cocina 09-23) son hora LOCAL.
+DEFAULT_TZ = "America/Santiago"
+
+
+def _local_hours(ts_like, tz_name: str = DEFAULT_TZ) -> np.ndarray:
+    """Horas locales fraccionales (0-24) de una colección de timestamps UTC."""
+    idx = pd.DatetimeIndex(pd.to_datetime(ts_like))
+    try:
+        if idx.tz is None:
+            idx = idx.tz_localize("UTC")
+        idx = idx.tz_convert(ZoneInfo(tz_name))
+    except Exception:
+        pass  # tz inválida => se usan las horas tal cual (UTC), mejor que reventar
+    return (idx.hour + idx.minute / 60.0).to_numpy(dtype=float)
 
 # Escalas fijas para hacer comparables caudal (L/min) y duración (s) en la distancia
 # 2D, sin necesidad de un StandardScaler persistido. ~45 s de duración "pesa" como
@@ -147,14 +172,19 @@ def _tolerances(centroids_norm: np.ndarray, frac: float = 8.0, floor: float = 12
 # -----------------------------------------------------------------------------
 # ENTRENAMIENTO
 # -----------------------------------------------------------------------------
-def train_disaggregator(df: pd.DataFrame, min_events: int = 20, fixtures: list = None) -> Dict[int, Dict]:
-    # fixtures: inventario declarado del recinto [{label, flow_lmin, volume_l, count}].
+def train_disaggregator(df: pd.DataFrame, min_events: int = 20, fixtures: list = None,
+                        tz_name: str = DEFAULT_TZ) -> Dict[int, Dict]:
+    # fixtures: inventario declarado del recinto
+    # [{label, flow_lmin, volume_l, count, uses_per_day?, hours?}].
     # Si viene, cada cluster se etiqueta por el artefacto REAL más cercano; si no, se
     # usa la heurística física genérica label_by_signature (comportamiento previo).
-    def _label(sig):
+    # uses_per_day y hours (catastro: aforos y horarios de operación) vetan candidatos
+    # incompatibles por frecuencia u horario — ver label_by_fixtures.
+    def _label(sig, events_per_day=None, local_hours=None):
         mf, md, mv, cvv = sig
         if fixtures:
-            lab = label_by_fixtures(mf, md, mv, cvv, fixtures)
+            lab = label_by_fixtures(mf, md, mv, cvv, fixtures,
+                                    events_per_day=events_per_day, local_hours=local_hours)
             if lab is not None:
                 return lab
         return label_by_signature(mf, md, mv, cvv)
@@ -188,6 +218,12 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20, fixtures: list =
     # (Autoflow/CIWS). Fallback a mean_flow si la columna no está (compat).
     modal = (ev["modal_flow"].values.astype(float)
              if "modal_flow" in ev.columns else flow)
+    # Hora LOCAL de cada evento y días cubiertos por la señal: alimentan los vetos de
+    # horario (cocina 09-23) y de frecuencia (eventos/día vs uses_per_day declarado).
+    ev_hours = _local_hours(ev["start_time"], tz_name)
+    span_days = max(
+        (df_proc.index.max() - df_proc.index.min()).total_seconds() / 86400.0, 1.0
+    )
 
     centroids = find_profiles(flow, dur)                 # raw [flow, dur]
     total = max(len(ev), 1)
@@ -216,7 +252,12 @@ def train_disaggregator(df: pd.DataFrame, min_events: int = 20, fixtures: list =
     # que IGNORABAN el volumen y producían etiquetas físicamente imposibles.
     groups: Dict[str, List[int]] = {}
     for i in range(len(centroids)):
-        lab = _label(_sig(assign0 == i))
+        mask0 = assign0 == i
+        lab = _label(
+            _sig(mask0),
+            events_per_day=float(mask0.sum()) / span_days,
+            local_hours=ev_hours[mask0],
+        )
         groups.setdefault(lab, []).append(i)
 
     m_cent, m_label = [], []
@@ -344,7 +385,8 @@ def apply_confirmations(profiles: Dict, confirmations: List[Dict]) -> Dict:
 # Cada evento segmentado se asigna al perfil 2D más cercano dentro de tolerancia;
 # su caudal se reparte timestep a timestep (min(caudal, centroide)) con residual.
 # -----------------------------------------------------------------------------
-def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None,
+                       tz_name: str = DEFAULT_TZ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     if not profiles:
         raise ValueError("No trained profiles provided.")
 
@@ -366,15 +408,32 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None) 
     cent_norm = _normalize(cent[:, 0], cent[:, 1])
     tol_nd = np.array([float(p.get("tol_nd") or 0.0) for p in plist], dtype=float)
 
+    # Ventanas horarias declaradas (catastro) por etiqueta de perfil: un evento fuera
+    # del horario de operación del artefacto (p.ej. cocina 09-23) NO puede atribuirse
+    # a ese perfil — se considera el siguiente más cercano permitido. Sin horarios
+    # declarados el comportamiento es idéntico al previo.
+    hours_map = hours_by_label(fixtures)
+    prof_windows = [hours_map.get(lab) for lab in labels]
+    any_sched = any(w for w in prof_windows)
+
     df_result = pd.DataFrame(0.0, index=flow_s.index, columns=out_cols + [COMPOSITE, "No Detectado"])
     residual = flow_s.copy()
 
     df_seg = segment_events(df_proc)
+    seg_hours = (_local_hours(df_seg["start_time"], tz_name)
+                 if (any_sched and not df_seg.empty) else None)
     n_ok = n_rej = n_comp = 0
     if not df_seg.empty:
-        for _, ev in df_seg.iterrows():
+        for k, (_, ev) in enumerate(df_seg.iterrows()):
             s, e = ev["start_time"], ev["end_time"]
             seg = residual[s:e]
+            # Máscara de perfiles PERMITIDOS por horario para la hora local del evento.
+            allowed = None
+            if seg_hours is not None:
+                h = float(seg_hours[k])
+                allowed = np.array([
+                    hour_in_windows(h, w) if w else True for w in prof_windows
+                ], dtype=bool)
             # EVENTO CONCURRENTE (superposición de >=2 fixtures). ATRIBUCIÓN PARCIAL:
             # el caudal BASE continuo (el fixture dominante, p.ej. una ducha) se atribuye
             # a su categoría, y solo el EXCESO por encima de la base (la joroba del
@@ -391,8 +450,11 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None) 
                 base_level = float(np.median(pos)) if pos.size else 0.0
                 enb = _normalize(np.array([base_level]), np.array([ev["duration_s"]]))[0]
                 db = np.linalg.norm(cent_norm - enb, axis=1)
+                if allowed is not None:
+                    db = np.where(allowed, db, np.inf)
                 jb = int(np.argmin(db))
-                base_ok = base_level > 0 and (tol_nd[jb] <= 0 or db[jb] <= tol_nd[jb])
+                base_ok = (np.isfinite(db[jb]) and base_level > 0
+                           and (tol_nd[jb] <= 0 or db[jb] <= tol_nd[jb]))
                 if base_ok:
                     excess = np.maximum(vals - base_level, 0.0)
                     # solo el exceso SOSTENIDO (joroba real) es "Uso simultáneo"; el
@@ -405,10 +467,17 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None) 
                 residual[s:e] = 0.0
                 n_comp += 1
                 continue
-            # Clasificar el evento por su perfil 2D (caudal, duración) más cercano.
+            # Clasificar el evento por su perfil 2D (caudal, duración) más cercano
+            # PERMITIDO por horario (sin horarios declarados: el más cercano a secas).
             en = _normalize(np.array([ev["mean_flow"]]), np.array([ev["duration_s"]]))[0]
             d = np.linalg.norm(cent_norm - en, axis=1)
+            if allowed is not None:
+                d = np.where(allowed, d, np.inf)
             j = int(np.argmin(d))
+            if not np.isfinite(d[j]):
+                # Ningún perfil permitido a esta hora (todos con horario excluyente).
+                n_rej += 1
+                continue
             # RECHAZO por tolerancia 2D (tol_nd): si el evento cae fuera del radio
             # del perfil más cercano, el modelo dice "no sé" y el caudal queda en
             # No Detectado en vez de forzar una atribución. Antes tol_nd se
@@ -433,7 +502,7 @@ def run_disaggregation(df: pd.DataFrame, profiles: Dict, fixtures: list = None) 
           f"(concurrentes→Uso simultáneo={n_comp}, rechazados→No Detectado={n_rej})")
     # COMPOSITE entra como device para que sus eventos se emitan; si no hubo
     # concurrencia la columna es 0 y _build_events no genera nada para ella.
-    return _build_events(df_result, out_cols + [COMPOSITE], fixtures), df_result
+    return _build_events(df_result, out_cols + [COMPOSITE], fixtures, tz_name), df_result
 
 
 LEAK_FLOW_LMIN = 2.5      # caudal por debajo del cual un uso sostenido es goteo
@@ -442,7 +511,8 @@ TANK_FILL_MIN_L = 150.0   # volumen desde el que se considera llenado de acumula
 
 
 def _reclassify_oversized(label: str, mean_flow: float, duration_s: float,
-                          volume_l: float, fixtures: list = None) -> str:
+                          volume_l: float, fixtures: list = None,
+                          local_hour: float = None) -> str:
     """Reetiqueta un evento cuyo volumen es imposible para su artefacto.
 
     _build_events fusiona tramos contiguos, así que varias duchas seguidas (el
@@ -465,8 +535,15 @@ def _reclassify_oversized(label: str, mean_flow: float, duration_s: float,
     # justo con el umbral: se observaron llenados de 152-190 L a ~8 L/min en
     # ~20 min, que son exactamente la firma de la tina.
     if fixtures:
-        alt = label_by_fixtures(mean_flow, duration_s, volume_l, 0.0, fixtures)
-        if alt and alt != label:
+        # local_hours: la hora local del evento activa el veto de horario del catastro
+        # (un derrame nocturno no puede reetiquetarse como cocina fuera de su horario).
+        alt = label_by_fixtures(
+            mean_flow, duration_s, volume_l, 0.0, fixtures,
+            local_hours=(np.array([local_hour]) if local_hour is not None else None),
+        )
+        # UNCLASSIFIED no es un match: su rango de volumen por defecto es (0, inf) y
+        # cortocircuitaría las ramas de abajo (Llenado de estanque / Uso simultáneo).
+        if alt and alt != label and alt != UNCLASSIFIED:
             amin, amax = VOLUME_RANGE_BY_LABEL.get(alt, (0.0, float("inf")))
             if amin <= volume_l <= amax:
                 return alt
@@ -475,7 +552,8 @@ def _reclassify_oversized(label: str, mean_flow: float, duration_s: float,
     return COMPOSITE
 
 
-def _build_events(df_result: pd.DataFrame, device_names: List[str], fixtures: list = None) -> pd.DataFrame:
+def _build_events(df_result: pd.DataFrame, device_names: List[str], fixtures: list = None,
+                  tz_name: str = DEFAULT_TZ) -> pd.DataFrame:
     rows = []
     for col in device_names:
         is_active = df_result[col] > 0
@@ -493,7 +571,8 @@ def _build_events(df_result: pd.DataFrame, device_names: List[str], fixtures: li
             vol = integrate_volume(seg)   # litros con Δt real (antes seg.sum()/60)
             if not is_valid_event(avg, duration, vol):
                 continue
-            device = _reclassify_oversized(col, avg, duration, vol, fixtures)
+            local_hour = float(_local_hours([s], tz_name)[0]) if fixtures else None
+            device = _reclassify_oversized(col, avg, duration, vol, fixtures, local_hour)
             if device != col:
                 # Mover también los litros en la matriz de readings, para que los
                 # buckets del gráfico y la tabla de eventos no se contradigan.
