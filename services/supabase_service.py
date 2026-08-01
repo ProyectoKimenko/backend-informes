@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 from datetime import datetime, timezone
+import numpy as np
 import pandas as pd
 import os
 
@@ -54,43 +55,84 @@ def fetch_measurements(place_id: int, start_time: str, end_time: str, batch_size
     """
     sb = get_supabase()
 
-    all_rows = []
-    # PAGINACIÓN KEYSET (cursor por timestamp): cada página es un index-range scan de
-    # costo CONSTANTE — sin offset que escanee y descarte filas crecientes (O(n²)) y
-    # sin necesidad de chunkear por día. El keyset viejo fallaba porque un filtro de
-    # dedup podía acortar la página y el loop lo leía como "no hay más datos"; este
-    # NO filtra nada en el servidor y termina SOLO con página vacía. El `gt` del
-    # cursor puede saltar filas con timestamp idéntico (permitidas por el unique
-    # (place_id, flow_rate, timestamp)), pero el drop_duplicates de abajo las
-    # descartaba igual: mismo resultado final.
-    # Solo las columnas que usa el pipeline: `*` arrastraba ~2x de JSON muerto.
     start_dt = pd.to_datetime(start_time, utc=True)
     end_dt = pd.to_datetime(end_time, utc=True)
 
-    cursor = None
-    while True:
-        q = (
-            sb.table("measurements_realtime")
-            .select("timestamp,flow_rate,place_id")
-            .eq("place_id", place_id)
-            .lte("timestamp", end_dt.isoformat())
-        )
-        if cursor is None:
-            q = q.gte("timestamp", start_dt.isoformat())
-        else:
-            q = q.gt("timestamp", cursor)
-        rows = q.order("timestamp").limit(batch_size).execute().data
-        if not rows:
-            break
-        all_rows.extend(rows)
-        cursor = rows[-1]["timestamp"]
+    frames = []
 
-    if not all_rows:
+    # 1) TRAMO ANTIGUO desde flow_archive (columnar por hora): el crudo se poda a los
+    # 30 días tras archivado verificado, así que los rangos largos (retrain/backfill)
+    # viven aquí. Se transportan ~cientos de objetos-hora con arrays en vez de
+    # millones de filas JSON; el desarmado es numpy (barato).
+    raw_floor_rows = (
+        sb.table("measurements_realtime")
+        .select("timestamp")
+        .eq("place_id", place_id)
+        .order("timestamp")
+        .limit(1)
+        .execute()
+        .data
+    )
+    raw_floor = pd.to_datetime(raw_floor_rows[0]["timestamp"], utc=True) if raw_floor_rows else end_dt
+
+    if start_dt < raw_floor:
+        packed = sb.rpc("read_flow_archive_packed", {
+            "p_place_id": place_id,
+            "p_start": start_dt.isoformat(),
+            "p_end": min(raw_floor, end_dt).isoformat(),
+        }).execute().data or []
+        if packed:
+            ts_parts, flow_parts = [], []
+            for h in packed:
+                base = pd.Timestamp(h["hour"]).tz_convert("UTC") if pd.Timestamp(h["hour"]).tzinfo \
+                    else pd.Timestamp(h["hour"]).tz_localize("UTC")
+                offs = np.asarray(h["offs_ms"], dtype="int64")
+                ts_parts.append(base.value + offs * 1_000_000)   # ns
+                flow_parts.append(np.asarray(h["flows"], dtype="float64"))
+            ts_all = pd.to_datetime(np.concatenate(ts_parts), utc=True)
+            df_arch = pd.DataFrame({
+                "timestamp": ts_all,
+                "flow_rate": np.concatenate(flow_parts),
+                "place_id": place_id,
+            })
+            # respetar el rango pedido (el archivo trae horas completas)
+            df_arch = df_arch[(df_arch["timestamp"] >= start_dt) & (df_arch["timestamp"] <= end_dt)]
+            frames.append(df_arch)
+            print(f"[fetch] place_id={place_id} archivo: {len(packed)} horas → {len(df_arch)} muestras")
+
+    # 2) TRAMO RECIENTE desde el crudo con PAGINACIÓN KEYSET (cursor por timestamp):
+    # páginas a costo constante sobre el índice, sin filtros server-side (el dedup
+    # vive abajo en pandas) y terminando SOLO con página vacía. Solo las columnas
+    # que usa el pipeline (`*` arrastraba ~2x de JSON muerto).
+    raw_start = max(start_dt, raw_floor)
+    all_rows = []
+    if raw_start <= end_dt:
+        cursor = None
+        while True:
+            q = (
+                sb.table("measurements_realtime")
+                .select("timestamp,flow_rate,place_id")
+                .eq("place_id", place_id)
+                .lte("timestamp", end_dt.isoformat())
+            )
+            if cursor is None:
+                q = q.gte("timestamp", raw_start.isoformat())
+            else:
+                q = q.gt("timestamp", cursor)
+            rows = q.order("timestamp").limit(batch_size).execute().data
+            if not rows:
+                break
+            all_rows.extend(rows)
+            cursor = rows[-1]["timestamp"]
+    if all_rows:
+        df_raw = pd.DataFrame(all_rows)
+        df_raw["timestamp"] = pd.to_datetime(df_raw["timestamp"], utc=True, errors="coerce")
+        frames.append(df_raw)
+
+    if not frames:
         return pd.DataFrame()
 
-    df = pd.DataFrame(all_rows)
-
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    df = pd.concat(frames, ignore_index=True)
     df = df.dropna(subset=["timestamp"])
     df = df.drop_duplicates(subset=["timestamp", "place_id"])
     df = df.sort_values("timestamp").reset_index(drop=True)
