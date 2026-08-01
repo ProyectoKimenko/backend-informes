@@ -942,42 +942,32 @@ def check_weeks(year: int):
 
         supabase = get_supabase()  # singleton (prefiere service_role)
         weeks_data = {}
-        
+
         # Use UTC timezone starting at 00:00
         last_day = datetime(year, 12, 28, tzinfo=timezone.utc)
         total_weeks = last_day.isocalendar()[1]
-        
+
+        # UNA pasada sobre el rollup por minuto (RPC weeks_with_data) en vez de 52
+        # counts secuenciales (~8 s por request) sobre la tabla legacy
+        # 'measurements', que no recibe datos desde 2025: el selector del informe
+        # semanal marcaba TODAS las semanas sin datos.
+        rows = supabase.rpc("weeks_with_data", {"p_year": year}).execute().data or []
+        counts = {int(r["week"]): int(r["records"]) for r in rows}
+
         for week in range(1, total_weeks + 1):
             week_start = datetime.fromisocalendar(year, week, 1)
             week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
             week_end = datetime.fromisocalendar(year, week, 7)
             week_end = week_end.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
-            
-            # Convert to milliseconds timestamp
-            start_epoch = int(week_start.timestamp() * 1000)
-            end_epoch = int(week_end.timestamp() * 1000)
-            
-            # Solo se necesita CUÁNTAS filas hay, no las filas. Antes traía todas
-            # (select "*") 52 veces —millones de filas a memoria por request, el
-            # peor consumidor de RAM de la API—. count='exact' lo resuelve en la
-            # base y devuelve un único número.
-            response = supabase.table("measurements") \
-                .select("id", count="exact") \
-                .gte("timestamp", start_epoch) \
-                .lte("timestamp", end_epoch) \
-                .limit(1) \
-                .execute()
 
-            record_count = response.count or 0
-            has_data = record_count > 100
-            
+            record_count = counts.get(week, 0)
             weeks_data[week] = {
-                'has_data': has_data,
+                'has_data': record_count > 100,
                 'start_date': week_start.strftime('%Y-%m-%d'),
                 'end_date': week_end.strftime('%Y-%m-%d'),
                 'records': record_count
             }
-        
+
         return {"year": year, "weeks": weeks_data}
         
     except HTTPException as he:
