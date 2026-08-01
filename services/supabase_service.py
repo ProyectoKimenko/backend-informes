@@ -599,75 +599,48 @@ def get_stackplot_data(
     """
     sb = get_supabase()
 
-    query = (
-        sb.table("disaggregated_readings")
-        .select("time_bucket, category, volume_liters")
-        .eq("place_id", place_id)
-    )
+    # AGREGACIÓN EN LA DB (RPC stackplot_agg): llegan buckets hora/día ya sumados
+    # (~decenas-cientos de filas) en vez de cada fila minuto×categoría paginada por
+    # offset. Desaparece también el truncamiento de max_points, que en rangos largos
+    # cortaba datos EN SILENCIO y el gráfico mostraba menos consumo del real.
+    # week/month se agregan aquí desde el nivel día (el resample de pandas conserva
+    # el etiquetado histórico de los buckets: W domingo, ME fin de mes).
+    gran_db = "hour" if granularity == "hour" else "day"
+    rows = sb.rpc("stackplot_agg", {
+        "p_place_id": int(place_id),
+        "p_start": start_time,
+        "p_end": end_time,
+        "p_granularity": gran_db,
+    }).execute().data or []
 
-    if start_time:
-        query = query.gte("time_bucket", start_time)
-    
-    if end_time:
-        query = query.lte("time_bucket", end_time)
-
-    # ✅ Paginación para conjuntos grandes
-    all_data = []
-    offset = 0
-    page_size = 10000
-    
-    while True:
-        try:
-            response = query.order("time_bucket").range(offset, offset + page_size - 1).execute()
-        except Exception as e:
-            print(f"[ERROR] Failed to fetch stackplot data at offset {offset}: {e}")
-            break
-        
-        if not response.data:
-            break
-        
-        all_data.extend(response.data)
-        
-        # ✅ Protección contra OOM
-        if len(all_data) >= max_points:
-            print(f"[WARNING] Reached max_points limit ({max_points}). Consider narrowing time range.")
-            break
-        
-        if len(response.data) < page_size:
-            break
-        
-        offset += page_size
-
-    if not all_data:
+    if not rows:
         return pd.DataFrame()
 
-    df = pd.DataFrame(all_data)
-    
-    # ✅ Conversión robusta de timestamps
+    df = pd.DataFrame(rows)
     df["time_bucket"] = pd.to_datetime(df["time_bucket"], utc=True, errors='coerce')
-    df = df.dropna(subset=['time_bucket'])  # Eliminar timestamps inválidos
+    df = df.dropna(subset=['time_bucket'])
 
-    # Pivot
     df_pivot = (
         df.pivot_table(
-            index="time_bucket", 
-            columns="category", 
-            values="volume_liters", 
+            index="time_bucket",
+            columns="category",
+            values="volume_liters",
             aggfunc="sum"
         )
         .fillna(0)
     )
 
-    # Resample
     freq_map = {
         "hour": "h",
         "day": "D",
         "week": "W",
         "month": "ME"
     }
-
     freq = freq_map.get(granularity, "D")
-    df_resampled = df_pivot.resample(freq).sum()
+    if granularity in ("week", "month"):
+        df_resampled = df_pivot.resample(freq).sum()
+    else:
+        df_resampled = df_pivot
 
     # Ordenar columnas por total (mayor a menor)
     total_by_device = df_resampled.sum().sort_values(ascending=False)
