@@ -1278,18 +1278,17 @@ def get_available_dates(place_id: int, year: int, month: int):
 
 @app.get("/api/places/{place_id}/data-range")
 def get_data_range(place_id: int):
-    """Rango temporal con datos en measurements_realtime para un place.
-    El frontend lo usa para inicializar el selector en el último mes CON datos
-    (en vez del mes actual del reloj, que suele estar vacío)."""
+    """Rango temporal con datos para un place (historia archivada + crudo vivo).
+    El frontend lo usa para inicializar el selector en el último mes CON datos.
+    Vía RPC: el crudo solo conserva ~30 días (el resto vive en flow_archive y su
+    rollup por minuto), así que el mínimo sale de measurements_minute."""
     sb = get_supabase()
     try:
-        mx = (sb.table("measurements_realtime").select("timestamp")
-              .eq("place_id", place_id).order("timestamp", desc=True).limit(1).execute())
-        mn = (sb.table("measurements_realtime").select("timestamp")
-              .eq("place_id", place_id).order("timestamp").limit(1).execute())
-        if not mx.data or not mn.data:
+        rows = sb.rpc("flow_data_range", {"p_place_id": place_id}).execute().data or []
+        r = rows[0] if rows else {}
+        if not r.get("min_ts") or not r.get("max_ts"):
             return {"has_data": False}
-        return {"has_data": True, "min": mn.data[0]["timestamp"], "max": mx.data[0]["timestamp"]}
+        return {"has_data": True, "min": r["min_ts"], "max": r["max_ts"]}
     except Exception as e:
         log_error(logger, f"data-range place {place_id}", e)
         return {"has_data": False, "error": str(e)}
