@@ -637,10 +637,10 @@ def get_stackplot_data(
         "month": "ME"
     }
     freq = freq_map.get(granularity, "D")
-    if granularity in ("week", "month"):
-        df_resampled = df_pivot.resample(freq).sum()
-    else:
-        df_resampled = df_pivot
+    # Resample SIEMPRE: además de agregar week/month desde día, rellena con ceros
+    # los buckets sin datos (huecos del scraper) — el eje temporal del gráfico
+    # muestra los vacíos en vez de comprimirlos (comportamiento histórico).
+    df_resampled = df_pivot.resample(freq).sum()
 
     # Ordenar columnas por total (mayor a menor)
     total_by_device = df_resampled.sum().sort_values(ascending=False)
