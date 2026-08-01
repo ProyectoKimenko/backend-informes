@@ -33,15 +33,14 @@ def get_supabase() -> Client:
 
 def fetch_measurements(place_id: int, start_time: str, end_time: str, batch_size: int = 10000) -> pd.DataFrame:
     """
-    Obtiene mediciones usando paginación por offset (más robusta que por cursor).
+    Obtiene mediciones con paginación KEYSET (cursor = último timestamp recibido).
 
-    La paginación anterior usaba el último timestamp como cursor, lo que causaba
-    cortes prematuros cuando el filtro de deduplicación reducía el batch por debajo
-    de batch_size — el loop interpretaba eso como "no hay más datos" aunque hubiera
-    decenas de miles de filas restantes.
-
-    La paginación por offset (range) no tiene ese problema: itera en bloques fijos
-    independientemente del contenido, y termina solo cuando Supabase devuelve 0 filas.
+    Historia: un keyset previo cortaba prematuro porque un filtro de dedup server-side
+    acortaba páginas y el loop lo interpretaba como fin de datos; se pasó a offset por
+    día, que aguantaba pero re-escaneaba filas dentro de cada día (O(n²) acotado) y
+    traía todas las columnas. Esta versión keyset no aplica NINGÚN filtro server-side
+    (el dedup vive abajo en pandas), termina solo con página vacía, pagina a costo
+    constante sobre el índice (place_id, timestamp) y trae solo las columnas usadas.
 
     Args:
         place_id: ID del lugar
@@ -56,37 +55,35 @@ def fetch_measurements(place_id: int, start_time: str, end_time: str, batch_size
     sb = get_supabase()
 
     all_rows = []
-    # CHUNK POR DÍA: acota el OFFSET a ~1 día de filas (~86k a 1 Hz). El offset global
-    # sobre rangos largos (p.ej. 30 días = 2.6M filas) hacía que cada página escaneara
-    # y descartara N filas crecientes (O(n²)) hasta superar el timeout de PostgREST →
-    # "Server disconnected". Con chunks diarios el offset máximo por día es chico y
-    # constante, y el índice de timestamp sirve el rango. Habilita reentrenar sobre
-    # rangos largos sin reventar.
+    # PAGINACIÓN KEYSET (cursor por timestamp): cada página es un index-range scan de
+    # costo CONSTANTE — sin offset que escanee y descarte filas crecientes (O(n²)) y
+    # sin necesidad de chunkear por día. El keyset viejo fallaba porque un filtro de
+    # dedup podía acortar la página y el loop lo leía como "no hay más datos"; este
+    # NO filtra nada en el servidor y termina SOLO con página vacía. El `gt` del
+    # cursor puede saltar filas con timestamp idéntico (permitidas por el unique
+    # (place_id, flow_rate, timestamp)), pero el drop_duplicates de abajo las
+    # descartaba igual: mismo resultado final.
+    # Solo las columnas que usa el pipeline: `*` arrastraba ~2x de JSON muerto.
     start_dt = pd.to_datetime(start_time, utc=True)
     end_dt = pd.to_datetime(end_time, utc=True)
 
-    day = start_dt
-    while day < end_dt:
-        day_end = min(day + pd.Timedelta(days=1), end_dt)
-        is_last = day_end >= end_dt
-        offset = 0
-        while True:
-            q = (
-                sb.table("measurements_realtime")
-                .select("*")
-                .eq("place_id", place_id)
-                .gte("timestamp", day.isoformat())
-            )
-            # rango semiabierto [day, day_end) salvo el último chunk (cerrado en end).
-            q = q.lte("timestamp", day_end.isoformat()) if is_last else q.lt("timestamp", day_end.isoformat())
-            rows = q.order("timestamp").range(offset, offset + batch_size - 1).execute().data
-            if not rows:
-                break
-            all_rows.extend(rows)
-            if len(rows) < batch_size:
-                break
-            offset += batch_size
-        day = day_end
+    cursor = None
+    while True:
+        q = (
+            sb.table("measurements_realtime")
+            .select("timestamp,flow_rate,place_id")
+            .eq("place_id", place_id)
+            .lte("timestamp", end_dt.isoformat())
+        )
+        if cursor is None:
+            q = q.gte("timestamp", start_dt.isoformat())
+        else:
+            q = q.gt("timestamp", cursor)
+        rows = q.order("timestamp").limit(batch_size).execute().data
+        if not rows:
+            break
+        all_rows.extend(rows)
+        cursor = rows[-1]["timestamp"]
 
     if not all_rows:
         return pd.DataFrame()

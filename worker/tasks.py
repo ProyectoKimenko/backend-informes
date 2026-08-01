@@ -275,6 +275,15 @@ def process_all_places():
         except Exception as e:
             print(f"[CRON] place_id={pid} falló: {e}")
 
+    # Consolidar el rollup por minuto de la última ventana (sana minutos que hayan
+    # quedado cortos por filas en vuelo durante backfills). Best-effort: el rollup
+    # es cache de estadísticas, no bloquea la inferencia.
+    try:
+        healed = get_supabase().rpc("consolidate_minutes", {"p_hours": 2}).execute()
+        print(f"[CRON] consolidate_minutes: {healed.data} minutos re-agregados")
+    except Exception as e:
+        print(f"[CRON] consolidate_minutes falló (no crítico): {e}")
+
     return {
         "places_processed": processed,
         "places_total": len(places),
